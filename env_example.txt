@@ -1,0 +1,25 @@
+# ENVIRONMENT VARIABLES FOR ICSS
+# ===============================
+
+# SUPABASE DATABASE
+# Get from: https://supabase.com/dashboard/project/your-project-id/settings/api
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-supabase-anon-key-here
+
+# EMAIL ALERT CONFIGURATION
+# ========================
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your@gmail.com
+SMTP_PASSWORD=your-app-password
+EMAIL_FROM=your@gmail.com
+EMAIL_TO=recipient@gmail.com
+
+# SMS ALERT CONFIGURATION
+# ======================
+SMS_PHONE_NUMBER=1234567890
+SMS_CARRIER=AT&T
+# Optional: Twilio configuration (if using Twilio instead of email-to-SMS gateway)
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+TWILIO_FROM_NUMBER=+1234567890
