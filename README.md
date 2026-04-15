@@ -36,7 +36,7 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - 📊 **Density Estimation** - CSRNet neural network for heatmap generation
 - 🗺️ **Zone-based Analysis** - Grid-based risk highlighting
 - 🧠 **Advanced Analytics** - Intelligent risk assessment, flow analysis
-- 💾 **Local Storage** - DuckDB for offline analytics
+- 💾 **Cloud Storage** - Supabase for cloud analytics and data persistence
 - 🚨 **Real-time Alerts** - Alert manager with sound notifications
 
 ---
@@ -93,7 +93,7 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 | **Computer Vision** | OpenCV, YOLO v11, YOLO v8 |
 | **AI/ML** | PyTorch, Ultralytics, CSRNet |
 | **Tracking** | Deep SORT |
-| **Database** | DuckDB (local analytics) |
+| **Database** | Supabase (cloud analytics) |
 | **Video Processing** | PyAV (av library) |
 | **Visualization** | Plotly, Matplotlib, Seaborn |
 | **Data Processing** | NumPy, Pandas, SciPy |
@@ -125,7 +125,7 @@ graph TB
     end
 
     subgraph "Storage & Visualization"
-        L[DuckDB<br/>Local Database]
+        L[Supabase<br/>Cloud Database]
         M[Streamlit UI<br/>6 Tabs]
     end
 
@@ -154,7 +154,7 @@ graph TB
 2. **Detection Layer**: Dual YOLO models (v11 + v8) for person detection, CSRNet for dense crowd density estimation
 3. **Tracking & Analytics Layer**: Deep SORT for tracking, Risk Engine for assessment, Zone/Flow analyzers for spatial analysis
 4. **Alert System**: Real-time alert manager with severity levels and sound notifications
-5. **Storage Layer**: DuckDB for offline analytics and historical data
+5. **Storage Layer**: Supabase for cloud analytics and historical data
 6. **Visualization Layer**: Streamlit UI with 6 tabs for comprehensive monitoring
 
 ---
@@ -169,7 +169,7 @@ ICSS
 ├── README.md                   # Project documentation
 ├── alert.md                    # Alert system setup guide
 ├── env_example.txt              # Environment variables template
-├── crowd_data.db               # DuckDB local database
+├── crowd_data.db               # Local cache database (backup)
 │
 ├── model/                      # AI model files
 │   ├── yolo11l.pt                  # YOLO v11 (51MB)
@@ -312,8 +312,8 @@ Open **http://localhost:8501** in your browser.
    - Visualize zone-based risk distribution
    - Monitor overcrowded areas
 
-5. **View Historical Data** (Tab 4: Local DB)
-   - Check stored analytics from DuckDB
+5. **View Historical Data** (Tab 4: Cloud DB)
+   - Check stored analytics from Supabase cloud database
    - View trends and statistics
 
 6. **Configure Settings** (Tab 5: Controls)
@@ -355,7 +355,7 @@ Open **http://localhost:8501** in your browser.
 | Zone Details | Per-zone people count and density |
 | Zone Alerts | Overcrowding and violation warnings |
 
-### Tab 4: 📂 Local DB
+### Tab 4: 📂 Cloud DB
 
 | Feature | Description |
 |---------|-------------|
@@ -415,9 +415,10 @@ Open **http://localhost:8501** in your browser.
    - Enable SMS alerts in Controls tab
    - Only CRITICAL alerts trigger SMS
 
-4. **Database Configuration** (Optional, for cloud storage)
+4. **Database Configuration** (Recommended, for cloud storage)
    - Configure Supabase credentials in .env
-   - Required for cloud data persistence
+   - Required for cloud data persistence and real-time sync
+   - Local cache used as backup when cloud unavailable
 
 **📋 Complete Setup Guide**: See `alert.md` for step-by-step instructions
 
@@ -575,7 +576,7 @@ Open **http://localhost:8501** in your browser.
 - **Frame Skipping**: Process every 3rd frame
 - **Resolution Scaling**: Adaptive 640x480 target
 - **Cached Model Loading**: @st.cache_resource
-- **Non-blocking Database**: Async DuckDB inserts
+- **Non-blocking Database**: Async Supabase inserts with local cache
 
 ---
 
@@ -609,7 +610,15 @@ Open **http://localhost:8501** in your browser.
 
 **Solution**: This warning can be ignored - it's expected behavior in async video processing.
 
-#### 5. DuckDB Errors
+#### 5. Supabase Connection Errors
+
+**Solution**: 
+- Check SUPABASE_URL and SUPABASE_ANON_KEY in .env
+- Verify Supabase project is active
+- Check network connectivity to Supabase
+- Review console for detailed error messages
+
+#### 6. Local Cache Issues
 
 **Solution**: 
 - Check `crowd_data.db` file permissions
@@ -628,7 +637,7 @@ opencv-python>=4.8.0
 ultralytics>=8.0.0
 numpy>=1.24.0
 av>=10.0.0
-duckdb>=0.9.0
+supabase>=1.0.0
 plotly>=5.15.0
 pandas>=2.0.0
 ```
@@ -688,10 +697,10 @@ deep-sort-realtime  # For Deep SORT tracking
 
 ## Data Storage
 
-### DuckDB Database
+### Supabase Database
 
-- **File**: `crowd_data.db`
-- **Type**: Local analytical database
+- **Type**: Cloud-based PostgreSQL database
+- **Connection**: REST API via Supabase client
 - **Schema**:
 
 ```sql
@@ -706,9 +715,11 @@ CREATE TABLE crowd_metrics (
 
 ### Data Operations
 
-- **Insert**: Every processed frame
+- **Insert**: Every processed frame (real-time sync)
 - **Query**: Last 10 records for trends
 - **Statistics**: Average values, risk distribution
+- **Sync**: Real-time cloud synchronization
+- **Backup**: Local cache for offline access
 
 ---
 

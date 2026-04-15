@@ -827,7 +827,7 @@ def process_uploaded_video(video_file):
 
 
 # ================= MAIN UI WITH TABS =================
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🎥 Live Feed", "📊 Analytics", "🗺️ Map Area", "📂 Local DB", "⚙️ Controls", "🚨 Alerts"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🎥 Live Feed", "📊 Analytics", "🗺️ Map Area", "📂 Cloud DB", "⚙️ Controls", "🚨 Alerts"])
 
 with tab1:
     st.subheader("Live Surveillance Feed")
