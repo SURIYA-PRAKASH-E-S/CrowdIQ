@@ -245,6 +245,75 @@ def insert_alert(
     return False
 
 
+def insert_enhanced_alert(
+    alert_type: str,
+    severity: str,
+    zone: str = None,
+    count: int = 0,
+    density: float = 0.0,
+    message: str = "",
+    image_url: str = None,
+    timestamp: str = None,
+    email_sent: bool = False
+) -> bool:
+    """
+    Insert enhanced alert with additional fields for the new alert system.
+    Returns True on success, False on failure.
+    
+    Enhanced Supabase table schema:
+        id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
+        timestamp   TIMESTAMPTZ DEFAULT NOW()
+        type        TEXT
+        severity    TEXT
+        zone        TEXT
+        count       INTEGER
+        density     FLOAT8
+        message     TEXT
+        image_url   TEXT
+        email_sent  BOOLEAN
+    """
+    if _client is None:
+        return False
+
+    # Build alert data
+    alert_data = {
+        "type": alert_type,
+        "severity": severity,
+        "message": message,
+    }
+    
+    # Add optional fields if provided
+    if zone is not None:
+        alert_data["zone"] = zone
+    if count > 0:
+        alert_data["count"] = count
+    if density > 0:
+        alert_data["density"] = density
+    if image_url:
+        alert_data["image_url"] = image_url
+    if timestamp:
+        alert_data["timestamp"] = timestamp
+    alert_data["email_sent"] = email_sent
+
+    # Try full insert first, then fallback to basic schema
+    for row in [
+        alert_data,
+        {"message": message, "severity": severity, "type": alert_type},
+        {"message": message, "severity": severity},
+        {"message": message},
+    ]:
+        try:
+            _client.table("alerts").insert(row).execute()
+            logger.info(f"Enhanced alert inserted: {alert_type}")
+            return True
+        except Exception as e:
+            logger.debug(f"Insert attempt failed: {e}")
+            continue
+
+    logger.error("insert_enhanced_alert: all fallback inserts failed for alert_type=%r", alert_type)
+    return False
+
+
 def fetch_recent_alerts(limit: int = 50) -> pd.DataFrame:
     """
     Return the last *limit* alert rows as a DataFrame (newest first).

@@ -537,16 +537,36 @@ class VideoProcessor(VideoTransformerBase):
                 session_manager.update_data('zone_summary', zone_summary)
                 session_manager.update_data('zone_alerts', zone_alerts)
 
-                # Persist new zone alerts to Supabase (throttled — only when count grows)
+                # Persist new zone alerts to Supabase with enhanced features (throttled)
                 if zone_alerts:
                     prev_count = getattr(self, '_last_saved_alert_count', 0)
                     if len(zone_alerts) > prev_count:
-                        for alert_msg in zone_alerts[prev_count:]:
-                            insert_alert(
-                                message=str(alert_msg),
-                                status="active",
+                        # Import enhanced alert utilities
+                        from utils.alert_store import insert_enhanced_alert
+                        
+                        for i, alert_msg in enumerate(zone_alerts[prev_count:]):
+                            # Extract zone information if available
+                            zone_info = None
+                            if isinstance(alert_msg, dict) and 'zone_id' in alert_msg:
+                                zone_info = alert_msg
+                                alert_text = alert_msg.get('message', str(alert_msg))
+                            else:
+                                alert_text = str(alert_msg)
+                            
+                            # Capture current frame for snapshot
+                            current_frame = annotated_img.copy()
+                            
+                            # Insert enhanced alert with snapshot
+                            insert_enhanced_alert(
+                                alert_type="Zone Overcrowded",
                                 severity="HIGH",
+                                zone=zone_info.get('zone_id') if zone_info else None,
+                                count=zone_info.get('people_count', people_count) if zone_info else people_count,
+                                density=zone_info.get('density', density) if zone_info else density,
+                                message=alert_text,
+                                frame=current_frame
                             )
+                        
                         self._last_saved_alert_count = len(zone_alerts)
                 else:
                     self._last_saved_alert_count = 0
@@ -2029,180 +2049,10 @@ st.sidebar.metric("High Risk",       stats['high_risk_count'])
 st.sidebar.metric("Surge Detected",  stats['surge_count'])
 st.sidebar.metric("Zone Alerts",     stats['zone_alert_count'])
 
-# ================= TAB6: ALERTS DASHBOARD =================
+# ================= TAB6: ENHANCED ALERTS DASHBOARD =================
 with tab6:
-    st.subheader("🚨 Real-Time Alert Dashboard")
+    # Import the enhanced alert tab component
+    from components.alert_tab import render_enhanced_alert_tab
     
-    # Alert configuration and display in side-by-side layout
-    col_left, col_right = st.columns([1, 2])
-    
-    with col_left:
-        st.markdown("### 📧 Email Notifications")
-        st.markdown("---")
-        
-        sender_email = st.text_input(
-            "Sender Gmail",
-            value="",
-            placeholder="your@gmail.com",
-            key="alert_sender_email"
-        )
-        app_password = st.text_input(
-            "App Password",
-            value="",
-            type="password",
-            placeholder="Gmail App Password",
-            key="alert_app_password"
-        )
-        recipient_email = st.text_input(
-            "Recipient Email",
-            value="",
-            placeholder="recipient@gmail.com",
-            key="alert_recipient_email"
-        )
-        enable_email = st.checkbox("✅ Enable Email Alerts", key="enable_email_alerts")
-        
-        st.markdown("### 📱 SMS Notifications")
-        st.markdown("---")
-        
-        phone_number = st.text_input(
-            "Phone Number",
-            value="",
-            placeholder="1234567890",
-            key="alert_phone_number"
-        )
-        carrier = st.selectbox(
-            "Carrier",
-            options=["Airtel", "Jio", "VI (Vodafone)", "AT&T", "T-Mobile", "Verizon"],
-            key="alert_carrier"
-        )
-        enable_sms = st.checkbox("✅ Enable SMS Alerts", key="enable_sms_alerts")
-        
-        st.markdown("### ⚙️ Alert Thresholds")
-        st.markdown("---")
-        
-        cooldown = st.slider(
-            "Alert Cooldown (seconds)",
-            min_value=10,
-            max_value=300,
-            value=60,
-            key="alert_cooldown"
-        )
-        surge_threshold = st.slider(
-            "Surge Threshold (%)",
-            min_value=10,
-            max_value=200,
-            value=50,
-            key="alert_surge_threshold"
-        )
-        surge_window = st.slider(
-            "Surge Window (seconds)",
-            min_value=5,
-            max_value=60,
-            value=10,
-            key="alert_surge_window"
-        )
-        
-        if st.button("🔕 Clear All Alerts", key="clear_alerts_btn"):
-            st.session_state.alert_manager.clear_alerts()
-            st.success("All alerts cleared")
-        
-        # Update alert manager configuration
-        if enable_email or enable_sms:
-            notifier_config = {
-                'smtp_host': 'smtp.gmail.com',
-                'smtp_port': 587,
-                'sender_email': sender_email,
-                'sender_password': app_password,
-                'recipient_email': recipient_email,
-                'phone_number': phone_number,
-                'carrier': carrier
-            }
-            st.session_state.alert_manager._notifier = AlertNotifier(**notifier_config)
-            st.session_state.alert_manager.enable_email = enable_email
-            st.session_state.alert_manager.enable_sms = enable_sms
-            st.session_state.alert_manager.cooldown = cooldown
-        
-        st.session_state.alert_manager._surge_detector.threshold = surge_threshold
-        st.session_state.alert_manager._surge_detector.window = surge_window
-    
-    with col_right:
-        # ── Refresh controls ────────────────────────────────────────────
-        refresh_col1, refresh_col2 = st.columns([1, 2])
-        with refresh_col1:
-            if st.button("🔄 Refresh Alerts", key="refresh_alerts_btn"):
-                st.rerun()
-        with refresh_col2:
-            auto_refresh = st.checkbox(
-                "Auto-refresh every 5 s",
-                value=False,
-                key="alert_auto_refresh",
-                help="Automatically reloads the alert panel every 5 seconds",
-            )
-
-        st.markdown("### 🚨 Active Alerts (Last 5 Minutes)")
-        st.markdown("---")
-
-        active_alerts = st.session_state.alert_manager.get_active_alerts()
-
-        if active_alerts:
-            for alert in active_alerts:
-                sev = getattr(alert.severity, "value", str(alert.severity))
-                msg = f"[{sev}] {alert.formatted_time()} — {alert.message}"
-                if sev == "CRITICAL":
-                    st.error(msg)
-                elif sev == "HIGH":
-                    st.warning(msg)
-                else:
-                    st.info(msg)
-        else:
-            st.info("✅ No active alerts in the last 5 minutes. Start a video feed to begin monitoring.")
-
-        st.markdown("### 📊 Alert Statistics")
-        st.markdown("---")
-
-        stats = st.session_state.alert_manager.get_stats()
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            st.metric("Total", stats['total_alerts'])
-        with col2:
-            st.metric("Active (5 min)", stats['active_alerts'])
-        with col3:
-            st.metric("High Risk", stats['high_risk_count'])
-        with col4:
-            st.metric("Surges", stats['surge_count'])
-        with col5:
-            st.metric("Zone Alerts", stats['zone_alert_count'])
-
-        st.markdown("### 📜 In-Memory Alert History (Last 50)")
-        st.markdown("---")
-
-        recent_alerts = st.session_state.alert_manager.get_recent_alerts(50)
-        if recent_alerts:
-            import pandas as pd
-            df = pd.DataFrame([a.to_dict() for a in recent_alerts])
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("No alert history yet. Alerts are generated automatically when risk thresholds are breached.")
-
-        # ── Supabase persisted alerts ─────────────────────────────────────
-        st.markdown("### ☁️ Supabase Alert Log (Last 50)")
-        st.markdown("---")
-        if db_is_connected():
-            db_alerts_df = fetch_recent_alerts(50)
-            if not db_alerts_df.empty:
-                st.dataframe(db_alerts_df, use_container_width=True)
-            else:
-                st.info(
-                    "No alerts in Supabase yet.\n\n"
-                    "Zone alerts are saved automatically when crowd density exceeds thresholds.\n\n"
-                    "If the `alerts` table doesn't exist yet, run `supabase_schema.sql` "
-                    "in your Supabase SQL Editor."
-                )
-        else:
-            st.warning("Supabase not connected — alert history unavailable.")
-
-        # ── Auto-refresh: sleep then trigger a rerun ─────────────────────
-        if auto_refresh:
-            import time as _time
-            _time.sleep(5)
-            st.rerun()
+    # Render the enhanced alert tab with live monitoring, email toggle, and Cloudinary integration
+    render_enhanced_alert_tab()
