@@ -51,3 +51,27 @@ ALTER TABLE alerts ENABLE ROW LEVEL SECURITY;
 -- Allow the anon key to read and insert rows
 CREATE POLICY "alerts_anon_read"   ON alerts FOR SELECT USING (true);
 CREATE POLICY "alerts_anon_insert" ON alerts FOR INSERT WITH CHECK (true);
+
+--Enhanced Alerts Table
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    timestamp   TIMESTAMPTZ DEFAULT NOW(),
+    type        TEXT NOT NULL,
+    severity    TEXT NOT NULL,
+    zone        TEXT,
+    count       INTEGER,
+    density     FLOAT8,
+    message     TEXT NOT NULL,
+    image_url   TEXT,
+    email_sent  BOOLEAN DEFAULT FALSE
+);
+
+
+-- Settings Table (for email toggle)
+
+CREATE TABLE IF NOT EXISTS settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
