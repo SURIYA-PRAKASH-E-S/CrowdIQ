@@ -537,6 +537,10 @@ class VideoProcessor(VideoTransformerBase):
                 session_manager.update_data('zone_summary', zone_summary)
                 session_manager.update_data('zone_alerts', zone_alerts)
 
+                # Enhanced alert workflow based on camera source and manual settings
+                camera_source = getattr(st.session_state, 'camera_source', 'webcam')
+                manual_settings_active = getattr(st.session_state, 'apply_manual_settings', False)
+                
                 # Persist new zone alerts to Supabase with enhanced features (throttled)
                 if zone_alerts:
                     prev_count = getattr(self, '_last_saved_alert_count', 0)
@@ -556,15 +560,32 @@ class VideoProcessor(VideoTransformerBase):
                             # Capture current frame for snapshot
                             current_frame = annotated_img.copy()
                             
-                            # Insert enhanced alert with snapshot
+                            # Camera source and manual settings specific alert handling
+                            if manual_settings_active:
+                                # Use manual alert level
+                                alert_severity = getattr(st.session_state, 'manual_alert_level', 'MEDIUM')
+                                alert_type = "Manual Alert"
+                                alert_text = f"[Manual] {alert_text}"
+                            elif camera_source == 'mobile':
+                                # Mobile camera: Medium risk alerts only
+                                alert_severity = "MEDIUM"
+                                alert_type = "Medium Risk"
+                                alert_text = f"[Mobile Camera] {alert_text}"
+                            else:
+                                # Webcam/Live feed: Full alert severity
+                                alert_severity = "HIGH" if zone_info and zone_info.get('people_count', 0) > 20 else "MEDIUM"
+                                alert_type = "Zone Overcrowded"
+                            
+                            # Insert enhanced alert with snapshot and camera source info
                             insert_enhanced_alert(
-                                alert_type="Zone Overcrowded",
-                                severity="HIGH",
+                                alert_type=alert_type,
+                                severity=alert_severity,
                                 zone=zone_info.get('zone_id') if zone_info else None,
                                 count=zone_info.get('people_count', people_count) if zone_info else people_count,
                                 density=zone_info.get('density', density) if zone_info else density,
                                 message=alert_text,
-                                frame=current_frame
+                                frame=current_frame,
+                                camera_source=camera_source  # Add camera source metadata
                             )
                         
                         self._last_saved_alert_count = len(zone_alerts)
@@ -962,6 +983,9 @@ with tab1:
         st.markdown("### 🎥 Live Feed")
         
         if st.session_state.input_mode == "Webcam (Live)":
+            # Set camera source for alert workflow
+            st.session_state.camera_source = "webcam"
+            
             # ================= WEBRTC STREAM =================
             try:
                 webrtc_streamer(
@@ -974,8 +998,11 @@ with tab1:
             except AttributeError:
                 # streamlit-webrtc internal _polling_thread not yet initialised
                 # on rapid reruns — safe to ignore, component will recover.
-                st.info("⏳ Camera initialising — please wait a moment.")
+                st.info("Camera initialising — please wait a moment.")
         elif st.session_state.input_mode == "Mobile Camera (IP Webcam)":
+            # Set camera source for alert workflow
+            st.session_state.camera_source = "mobile"
+            
             # ================= MOBILE CAMERA — URL or WebRTC =================
             cam_mode = st.session_state.get("camera_mode", "Public URL (ngrok / Tunnel)")
 
@@ -1453,7 +1480,7 @@ with tab2:
 
     with tab3:
         # ================= DUCKDB ANALYTICS DASHBOARD =================
-        st.subheader("�️ Zone Map & Area Analysis")
+        st.subheader("Zone Map & Area Analysis")
         
         # Zone Map Summary
         st.markdown("### 🗺️ Zone Map Summary")

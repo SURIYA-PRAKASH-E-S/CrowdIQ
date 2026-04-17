@@ -43,6 +43,9 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - **Multi-Admin Email Setup** - Support for multiple administrators and security teams
 - **Cloudinary Integration** - Automatic snapshot capture and CDN storage
 - **Real-time Alert Dashboard** - Live alert monitoring with auto-refresh
+- **Manual Alert Controls** - Customizable alert levels and thresholds
+- **Camera Source Detection** - Different alert handling for mobile vs webcam
+- **SMS Feature Coming Soon** - Planned SMS notifications for critical alerts
 
 ---
 
@@ -77,9 +80,15 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - **Zone Overcrowding Alerts**: Per-zone capacity monitoring
 - **Crowd Surge Detection**: Rapid crowd increase alerts
 - **High Risk Level Alerts**: Global risk assessment notifications
-- **Mobile Camera Mode**: Medium-risk alerts for mobile feeds
-- **Professional Email Format**: Structured alert emails with timestamps
+- **Mobile Camera Mode**: Medium-risk alerts only for mobile feeds
+- **Professional Email Format**: Structured alerts with detailed information
 - **Test Email Function**: Verify email configuration before deployment
+- **Manual Alert Controls**: Customizable alert levels (LOW/MEDIUM/HIGH/CRITICAL)
+- **Manual Threshold Settings**: Adjustable density and people count thresholds
+- **Camera Source Detection**: Different alert handling for mobile vs webcam
+- **SMS Alerts (Coming Soon)**: Planned SMS notifications for critical alerts
+- **Alert Priority System**: Manual settings override automatic detection
+- **Real-time Settings Application**: Immediate effect of manual changes
 
 ### Advanced Analytics
 - **Smart Risk Engine**: Weighted risk scoring (density, flow conflict, speed)
@@ -93,6 +102,10 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - **Configurable Settings**: Thresholds, weights, grid sizes
 - **Data Export**: Download analytics data
 - **Mobile Camera Controls**: Sidebar configuration for IP Webcam
+- **Manual Alert Controls**: Customizable alert levels and thresholds
+- **Email Configuration UI**: Complete SMTP setup interface
+- **Live Alert Dashboard**: Real-time monitoring with auto-refresh
+- **Alert Statistics**: Comprehensive alert metrics and status
 
 ---
 
@@ -449,9 +462,13 @@ Open **http://localhost:8501** in your browser.
 
 | Feature | Description |
 |---------|-------------|
+| Manual Alert Controls | Customizable alert levels and thresholds |
+| Email Configuration | Complete SMTP setup for multiple administrators |
 | Active Alerts | Current critical and warning alerts |
 | Alert History | Past alert events log |
-| Alert Configuration | Threshold settings for different severity levels |
+| Alert Statistics | Comprehensive metrics and status display |
+| Live Alert Dashboard | Real-time monitoring with auto-refresh |
+| SMS Configuration | Planned SMS notifications (coming soon) |
 
 ---
 
@@ -476,14 +493,20 @@ Open **http://localhost:8501** in your browser.
    - Gmail 2FA must be enabled
    - Generate App Password (not regular password)
    - Configure SMTP credentials in .env file
-   - Enable email alerts in Controls tab
+   - Enable email alerts in Alerts tab
 
-3. **SMS Alert Setup** (Optional, for SMS notifications)
+3. **Manual Alert Configuration** (Optional, for custom alert levels)
+   - Set alert levels: LOW, MEDIUM, HIGH, CRITICAL
+   - Configure density thresholds (0.1-2.0 p/m²)
+   - Set people count thresholds (1-50 people)
+   - Apply settings in Alerts tab for immediate effect
+
+4. **SMS Alert Setup** (Optional, for SMS notifications)
    - Configure phone number and carrier in .env
-   - Enable SMS alerts in Controls tab
+   - Enable SMS alerts in Alerts tab
    - Only CRITICAL alerts trigger SMS
 
-4. **Database Configuration** (Recommended, for cloud storage)
+5. **Database Configuration** (Recommended, for cloud storage)
    - Configure Supabase credentials in .env
    - Required for cloud data persistence and real-time sync
    - Local cache used as backup when cloud unavailable
@@ -492,11 +515,12 @@ Open **http://localhost:8501** in your browser.
 
 ### Detection Thresholds
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Low Density Threshold | 0.5 | Triggers "Average" risk |
-| Medium Density Threshold | 1.0 | Triggers "Risky" risk |
-| People Count Threshold | 8 | Number for "Risky" level |
+| Parameter | Default | Manual Range | Description |
+|-----------|---------|-------------|-------------|
+| Low Density Threshold | 0.5 | 0.1-2.0 p/m² | Triggers "Average" risk |
+| Medium Density Threshold | 1.0 | 0.1-2.0 p/m² | Triggers "Risky" risk |
+| People Count Threshold | 8 | 1-50 people | Number for "Risky" level |
+| Alert Level | Automatic | LOW/MEDIUM/HIGH/CRITICAL | Manual alert severity |
 
 ### Risk Engine Weights
 
@@ -701,11 +725,6 @@ EMAIL_RECIPIENTS=it-security@company.com,operations@company.com,management@compa
 6. **Save Configuration**: Click "Save Email Configuration"
 7. **Test Setup**: Click "Send Test Email"
 
-**Detailed Guides**:
-- `enhanced_alert_setup.md` - Complete enhanced alert setup
-- `email_setup_guide.md` - Detailed email configuration
-- `doubts.md` - FAQ and troubleshooting
-
 ---
 
 ## Risk Level System
@@ -736,6 +755,48 @@ risk_score = (
 | Medium Density Threshold | 1.0 | Triggers "Risky" risk |
 | People Count Threshold | 8 | Number for "Risky" level |
 | Alert Cooldown | 60 seconds | Minimum time between alerts |
+
+---
+
+## Alert System Features
+
+### Manual Alert Controls
+
+The ICSS system now provides comprehensive manual control over alert levels and thresholds:
+
+#### **Alert Level Control**
+- **LOW**: Minor alerts for monitoring purposes
+- **MEDIUM**: Standard alert level for moderate incidents
+- **HIGH**: Important alerts requiring attention
+- **CRITICAL**: Emergency alerts requiring immediate action
+
+#### **Threshold Settings**
+- **Density Threshold**: 0.1-2.0 people per square meter
+- **People Count Threshold**: 1-50 people
+- **Real-time Application**: Settings take effect immediately
+
+#### **Alert Priority System**
+1. **Manual Settings** (highest priority) - Override automatic detection
+2. **Mobile Camera** (medium priority) - Medium risk alerts only
+3. **Webcam/Auto** (standard priority) - Full alert capabilities
+
+#### **Camera Source Detection**
+- **Webcam Mode**: Full alert severity (HIGH/CRITICAL/MEDIUM/LOW)
+- **Mobile Camera**: Medium risk alerts only
+- **Manual Mode**: Uses manually selected alert level
+
+#### **Alert Types**
+- **Manual Alerts**: `[Manual]` prefix when manual settings active
+- **Mobile Camera Alerts**: `[Mobile Camera]` prefix for mobile source
+- **Zone Overcrowding**: Standard zone-based alerts
+- **High Risk**: Global risk assessment alerts
+- **Crowd Surge**: Rapid crowd increase detection
+
+#### **Real-time Dashboard**
+- **Auto-refresh**: Every 3 seconds when enabled
+- **Live Statistics**: Current alert metrics and status
+- **Alert History**: Complete log of all alert events
+- **Service Status**: Database, email, and service connectivity
 
 ---
 
@@ -835,12 +896,6 @@ risk_score = (
 - Verify Supabase project is active
 - Check network connectivity to Supabase
 - Review console for detailed error messages
-
-#### 6. Local Cache Issues
-
-**Solution**: 
-- Check `crowd_data.db` file permissions
-- Delete `crowd_data.db` and restart app (will recreate)
 
 ---
 
@@ -957,4 +1012,30 @@ This project is for educational and research purposes.
 
 ---
 
-**Built with ❤️ using Streamlit, YOLO, PyTorch, and OpenCV**
+## Recent Enhancements
+
+### Manual Alert System (Latest)
+- **Customizable Alert Levels**: LOW, MEDIUM, HIGH, CRITICAL
+- **Adjustable Thresholds**: Density (0.1-2.0 p/m²) and People Count (1-50)
+- **Real-time Application**: Settings take effect immediately
+- **Priority System**: Manual settings override automatic detection
+- **Camera Source Detection**: Different handling for mobile vs webcam
+- **UI Improvements**: Clean interface without duplication glitches
+
+### Enhanced Email System
+- **Multi-Administrator Support**: Unlimited recipients
+- **Professional Email Format**: Structured alerts with detailed information
+- **Cloudinary Integration**: Automatic snapshot capture and CDN storage
+- **Test Email Function**: Verify configuration before deployment
+- **SMS Coming Soon**: Planned SMS notifications for critical alerts
+
+### System Improvements
+- **Fixed UI Duplication**: Resolved auto-refresh glitches
+- **Enhanced Alert Workflow**: Camera source-specific alert handling
+- **Better Documentation**: Comprehensive setup guides and troubleshooting
+
+---
+
+**Built with using Streamlit, YOLO, PyTorch and OpenCV**
+
+**Developed by [ES](https://github.com/SURIYA-PRAKASH-E-S)**

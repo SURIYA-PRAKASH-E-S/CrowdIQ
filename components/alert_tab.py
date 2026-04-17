@@ -88,15 +88,130 @@ def render_live_alert_log():
     else:
         st.info("✅ No active alerts in the last 5 minutes")
 
+def render_manual_alert_controls():
+    """Render manual alert level and density controls"""
+    st.markdown("### Manual Alert Controls")
+    st.markdown("---")
+    
+    # Initialize session state for manual controls
+    if 'manual_alert_level' not in st.session_state:
+        st.session_state.manual_alert_level = "MEDIUM"
+    if 'manual_density_threshold' not in st.session_state:
+        st.session_state.manual_density_threshold = 0.5
+    if 'manual_people_threshold' not in st.session_state:
+        st.session_state.manual_people_threshold = 10
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Alert Level Control
+        st.markdown("#### Alert Level")
+        alert_level = st.selectbox(
+            "Set Alert Level",
+            options=["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+            index=1,  # Default to MEDIUM
+            key="manual_alert_level_select_unique",
+            help="Manually set the alert severity level"
+        )
+        
+        # Update session state
+        if alert_level != st.session_state.manual_alert_level:
+            st.session_state.manual_alert_level = alert_level
+            st.success(f"Alert level set to: {alert_level}")
+    
+    with col2:
+        # Density Threshold Control
+        st.markdown("#### Density Threshold")
+        density_threshold = st.slider(
+            "Density Threshold (p/m²)",
+            min_value=0.1,
+            max_value=2.0,
+            value=st.session_state.manual_density_threshold,
+            step=0.1,
+            key="manual_density_slider_unique",
+            help="Set manual density threshold for alerts"
+        )
+        
+        # Update session state
+        if density_threshold != st.session_state.manual_density_threshold:
+            st.session_state.manual_density_threshold = density_threshold
+            st.success(f"Density threshold set to: {density_threshold} p/m²")
+    
+    # People Count Threshold
+    st.markdown("#### People Count Threshold")
+    people_threshold = st.slider(
+        "People Count Threshold",
+        min_value=1,
+        max_value=50,
+        value=st.session_state.manual_people_threshold,
+        step=1,
+        key="manual_people_slider_unique",
+        help="Set manual people count threshold for alerts"
+    )
+    
+    # Update session state
+    if people_threshold != st.session_state.manual_people_threshold:
+        st.session_state.manual_people_threshold = people_threshold
+        st.success(f"People threshold set to: {people_threshold}")
+    
+    # Apply Settings Button
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Apply Manual Settings", type="primary", key="apply_manual_settings_unique"):
+            # Store settings in session state for use in alert processing
+            st.session_state.apply_manual_settings = True
+            st.success("Manual alert settings applied!")
+            st.rerun()
+    
+    with col2:
+        if st.button("Reset to Default", key="reset_manual_settings_unique"):
+            # Reset to default values
+            st.session_state.manual_alert_level = "MEDIUM"
+            st.session_state.manual_density_threshold = 0.5
+            st.session_state.manual_people_threshold = 10
+            st.session_state.apply_manual_settings = False
+            st.success("Settings reset to default!")
+            st.rerun()
+    
+    # Current Settings Display
+    st.markdown("#### Current Manual Settings")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Alert Level", st.session_state.manual_alert_level)
+    with col2:
+        st.metric("Density", f"{st.session_state.manual_density_threshold} p/m²")
+    with col3:
+        st.metric("People", st.session_state.manual_people_threshold)
+    
+    # Status Indicator
+    if st.session_state.get('apply_manual_settings', False):
+        st.success("Manual settings are currently active")
+    else:
+        st.info("Using automatic alert detection")
+
 def render_email_configuration():
     """Render comprehensive email configuration for multiple administrators"""
-   
+    st.markdown("### Email Configuration")
+    st.markdown("---")
     
     # Email setup UI
     config_updated = setup_email_from_ui()
     
     if config_updated:
         st.rerun()
+    
+    # SMS coming soon section
+    st.markdown("### SMS Alerts")
+    st.markdown("---")
+    st.info("**SMS alerts feature coming soon!** Currently available: Email notifications for multiple administrators.")
+    
+    with st.expander("SMS Configuration", expanded=False):
+        st.warning("SMS alerts are under development and will be available soon!")
+        st.write("Planned features:")
+        st.write("- SMS notifications for CRITICAL alerts")
+        st.write("- Multiple phone number support") 
+        st.write("- Carrier gateway integration")
+        st.write("- International number support")
 
 def render_email_toggle():
     """Render simple email toggle (legacy compatibility)"""
@@ -162,10 +277,13 @@ def render_email_toggle():
 
 def render_alert_statistics():
     """Render alert statistics dashboard"""
-    st.markdown("### 📊 Alert Statistics")
+    st.markdown("### Alert Statistics")
     st.markdown("---")
     
     stats = get_alert_statistics()
+    
+    # Check if manual settings are active
+    manual_active = st.session_state.get('apply_manual_settings', False)
     
     # Metrics row
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -174,11 +292,37 @@ def render_alert_statistics():
     with col2:
         st.metric("Active (5m)", stats['active_alerts'])
     with col3:
-        st.metric("🔴 Critical", stats['critical_count'])
+        st.metric("Critical", stats['critical_count'])
     with col4:
-        st.metric("🟠 High", stats['high_count'])
+        st.metric("High", stats['high_count'])
     with col5:
-        st.metric("🔵 Medium", stats['medium_count'])
+        st.metric("Medium", stats['medium_count'])
+    
+    # Manual settings status
+    st.markdown("#### Manual Settings Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        status = "Active" if manual_active else "Inactive"
+        status_color = "Active" if manual_active else "Inactive"
+        st.metric("Manual Mode", status_color)
+    
+    with col2:
+        if manual_active:
+            st.metric("Alert Level", st.session_state.get('manual_alert_level', 'MEDIUM'))
+        else:
+            st.metric("Alert Level", "Auto")
+    
+    with col3:
+        if manual_active:
+            st.metric("Density", f"{st.session_state.get('manual_density_threshold', 0.5)} p/m²")
+        else:
+            st.metric("Density", "Auto")
+    
+    # Manual settings info
+    if manual_active:
+        st.info(f"Manual settings active: Level={st.session_state.get('manual_alert_level', 'MEDIUM')}, Density={st.session_state.get('manual_density_threshold', 0.5)} p/m², People={st.session_state.get('manual_people_threshold', 10)}")
+    else:
+        st.info("Using automatic alert detection thresholds")
     
     # Connection status
     st.markdown("### 🔌 Service Status")
@@ -240,22 +384,27 @@ def render_enhanced_alert_tab():
     # Auto-refresh controls at the top
     refresh_col1, refresh_col2 = st.columns([1, 3])
     with refresh_col1:
-        if st.button("🔄 Refresh", key="refresh_main", help="Refresh alert data"):
+        if st.button("Refresh", key="refresh_main_unique", help="Refresh alert data"):
             st.rerun()
     
     with refresh_col2:
         auto_refresh = st.checkbox(
-            "🔄 Auto-refresh every 3 seconds",
+            "Auto-refresh every 3 seconds",
             value=st.session_state.get("alert_auto_refresh", False),
-            key="alert_auto_refresh_main",
+            key="alert_auto_refresh_unique",
             help="Automatically refresh alerts every 3 seconds"
         )
     
     # Main content in a container to prevent duplication
-    with st.container(key="alert_main_container"):
+    with st.container(key="alert_main_container_unique"):
         col_left, col_right = st.columns([1, 2])
         
         with col_left:
+            # Manual alert controls
+            render_manual_alert_controls()
+            
+            st.markdown("---")
+            
             # Email configuration
             render_email_configuration()
             
@@ -278,11 +427,15 @@ def render_enhanced_alert_tab():
             # Historical alerts
             render_historical_alerts()
     
-    # Auto-refresh functionality (only if enabled)
-    if auto_refresh:
+    # Auto-refresh functionality (only if enabled and not already refreshing)
+    if auto_refresh and not st.session_state.get('is_refreshing', False):
+        st.session_state['is_refreshing'] = True
         import time
         time.sleep(3)
+        st.session_state['is_refreshing'] = False
         st.rerun()
+    elif not auto_refresh:
+        st.session_state['is_refreshing'] = False
 
 # Compatibility function for existing code
 def render_alert_tab():

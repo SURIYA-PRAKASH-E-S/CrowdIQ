@@ -310,7 +310,8 @@ def insert_enhanced_alert(
     count: int = 0,
     density: float = 0.0,
     message: str = "",
-    frame: Optional[Any] = None
+    frame: Optional[Any] = None,
+    camera_source: str = "webcam"
 ) -> bool:
     """
     Insert enhanced alert with optional image upload
@@ -323,6 +324,7 @@ def insert_enhanced_alert(
         density: Crowd density
         message: Alert message
         frame: OpenCV frame for snapshot upload (optional)
+        camera_source: Source of camera (webcam/mobile)
         
     Returns:
         True if successful, False otherwise
@@ -338,14 +340,18 @@ def insert_enhanced_alert(
         except Exception as e:
             logger.warning(f"Failed to upload alert snapshot: {e}")
     
-    # Insert alert
+    # Insert alert with camera source info
+    enhanced_message = message
+    if camera_source == "mobile":
+        enhanced_message = f"[Mobile Camera] {message}"
+    
     return _alert_store.insert_alert(
         alert_type=alert_type,
         severity=severity,
         zone=zone,
         count=count,
         density=density,
-        message=message,
+        message=enhanced_message,
         image_url=image_url,
         timestamp=datetime.utcnow().isoformat(),
         email_sent=False
