@@ -17,7 +17,9 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - [How to Run](#how-to-run)
 - [User Interface](#user-interface)
 - [Configuration](#configuration)
-- [Alert System Setup](#alert-system-setup)
+- [Enhanced Alert System](#enhanced-alert-system)
+- [Email Setup Guide](#email-setup-guide)
+- [Risk Level System](#risk-level-system)
 - [Dense Crowd Detection](#dense-crowd-detection)
 - [Performance](#performance)
 - [Troubleshooting](#troubleshooting)
@@ -30,14 +32,17 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 **Intelligent Crowd Surveillance System** is a real-time computer vision application designed for intelligent crowd monitoring, density estimation, and risk assessment. It combines multiple AI models (YOLO, CSRNet) for enhanced detection accuracy in both normal and dense crowd scenarios.
 
 ### Key Highlights
-- 🎯 **Dual YOLO Model System** - YOLO v11 + YOLO v8 for cross-validation
-- 📱 **Mobile Camera Support** - IP Webcam integration for flexible positioning
-- 🧪 **Dense Crowd Detection** - Enhanced detection for crowded scenes
-- 📊 **Density Estimation** - CSRNet neural network for heatmap generation
-- 🗺️ **Zone-based Analysis** - Grid-based risk highlighting
-- 🧠 **Advanced Analytics** - Intelligent risk assessment, flow analysis
-- 💾 **Cloud Storage** - Supabase for cloud analytics and data persistence
-- 🚨 **Real-time Alerts** - Alert manager with sound notifications
+- **Dual YOLO Model System** - YOLO v11 + YOLO v8 for cross-validation
+- **Mobile Camera Support** - IP Webcam integration for flexible positioning
+- **Dense Crowd Detection** - Enhanced detection for crowded scenes
+- **Density Estimation** - CSRNet neural network for heatmap generation
+- **Zone-based Analysis** - Grid-based risk highlighting
+- **Advanced Analytics** - Intelligent risk assessment, flow analysis
+- **Cloud Storage** - Supabase for cloud analytics and data persistence
+- **Enhanced Alert System** - Real-time alerts with email notifications and snapshots
+- **Multi-Admin Email Setup** - Support for multiple administrators and security teams
+- **Cloudinary Integration** - Automatic snapshot capture and CDN storage
+- **Real-time Alert Dashboard** - Live alert monitoring with auto-refresh
 
 ---
 
@@ -61,14 +66,20 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - **Zone Grid Highlighting**: Color-coded risk zones (Green/Yellow/Red)
 - **Enhanced Detection**: Optimized detection for crowded scenes
 
-### Alert System
+### Enhanced Alert System
 - **Real-time Alerts**: Automatic risk detection and notification
-- **Email Notifications**: Gmail SMTP integration for HIGH/CRITICAL alerts
-- **SMS Alerts**: Email-to-SMS gateway for CRITICAL alerts only
-- **Sound Notifications**: Audio alerts for critical events
-- **Alert History**: Track and manage alert events
-- **Severity Filtering**: Email (HIGH/CRITICAL), SMS (CRITICAL only)
-- **Mobile Camera Mode**: Medium-risk alerts only for mobile feeds
+- **Multi-Admin Email Notifications**: Support for unlimited administrators
+- **Email Configuration UI**: Complete SMTP setup in app interface
+- **Cloudinary Snapshot Integration**: Automatic image capture with alerts
+- **Live Alert Dashboard**: Real-time alert monitoring with auto-refresh
+- **Alert History**: Complete tracking and management of alert events
+- **Severity-Based Filtering**: Different alert levels for different scenarios
+- **Zone Overcrowding Alerts**: Per-zone capacity monitoring
+- **Crowd Surge Detection**: Rapid crowd increase alerts
+- **High Risk Level Alerts**: Global risk assessment notifications
+- **Mobile Camera Mode**: Medium-risk alerts for mobile feeds
+- **Professional Email Format**: Structured alert emails with timestamps
+- **Test Email Function**: Verify email configuration before deployment
 
 ### Advanced Analytics
 - **Smart Risk Engine**: Weighted risk scoring (density, flow conflict, speed)
@@ -94,6 +105,8 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 | **AI/ML** | PyTorch, Ultralytics, CSRNet |
 | **Tracking** | Deep SORT |
 | **Database** | Supabase (cloud analytics) |
+| **Email Services** | SMTP, Gmail, Outlook, Custom SMTP |
+| **Cloud Storage** | Cloudinary (image CDN) |
 | **Video Processing** | PyAV (av library) |
 | **Visualization** | Plotly, Matplotlib, Seaborn |
 | **Data Processing** | NumPy, Pandas, SciPy |
@@ -124,9 +137,19 @@ graph TB
         K[Alert Manager<br/>Real-time Alerts]
     end
 
-    subgraph "Storage & Visualization"
-        L[Supabase<br/>Cloud Database]
-        M[Streamlit UI<br/>6 Tabs]
+    subgraph "Enhanced Alert System"
+        L[Enhanced Alert Tab<br/>Live Dashboard]
+        M[Alert Store<br/>Supabase Integration]
+        N[Email Manager<br/>Multi-Admin SMTP]
+        O[Cloudinary Helper<br/>Snapshot Upload]
+        P[Email Configuration<br/>UI Setup]
+    end
+
+    subgraph "Storage & Services"
+        Q[Supabase<br/>Cloud Database]
+        R[Cloudinary<br/>Image CDN]
+        S[SMTP Services<br/>Gmail/Outlook/Custom]
+        T[Streamlit UI<br/>Enhanced Interface]
     end
 
     A --> D
@@ -141,11 +164,24 @@ graph TB
     H --> K
     I --> K
     J --> K
-    H --> L
-    I --> L
-    J --> L
-    K --> M
+    
+    K --> L
     L --> M
+    L --> N
+    K --> O
+    N --> P
+    
+    M --> Q
+    O --> R
+    N --> S
+    
+    H --> Q
+    I --> Q
+    J --> Q
+    Q --> T
+    R --> T
+    S --> T
+    L --> T
 ```
 
 ### Architecture Overview
@@ -153,9 +189,31 @@ graph TB
 1. **Input Layer**: Multiple input sources (Webcam, Mobile Camera via IP Webcam, Video Upload)
 2. **Detection Layer**: Dual YOLO models (v11 + v8) for person detection, CSRNet for dense crowd density estimation
 3. **Tracking & Analytics Layer**: Deep SORT for tracking, Risk Engine for assessment, Zone/Flow analyzers for spatial analysis
-4. **Alert System**: Real-time alert manager with severity levels and sound notifications
-5. **Storage Layer**: Supabase for cloud analytics and historical data
-6. **Visualization Layer**: Streamlit UI with 6 tabs for comprehensive monitoring
+4. **Enhanced Alert System**: Comprehensive alert management with live dashboard, multi-admin email, snapshot capture, and professional formatting
+5. **Storage & Services Layer**: Supabase for cloud analytics, Cloudinary for image CDN, SMTP services for email delivery
+6. **Visualization Layer**: Enhanced Streamlit UI with real-time monitoring and comprehensive configuration options
+
+### New Architecture Components
+
+#### **Enhanced Alert System Layer**
+- **Enhanced Alert Tab**: Live dashboard with auto-refresh and real-time monitoring
+- **Alert Store**: Supabase integration for persistent alert storage and retrieval
+- **Email Manager**: Multi-administrator SMTP support with Gmail/Outlook/Custom providers
+- **Cloudinary Helper**: Automatic snapshot capture and CDN upload on alert trigger
+- **Email Configuration**: Complete UI-based SMTP setup and recipient management
+
+#### **Storage & Services Layer**
+- **Supabase**: Cloud database for analytics, metrics, and alert history
+- **Cloudinary**: Image CDN for alert snapshots with automatic cleanup
+- **SMTP Services**: Email delivery through Gmail, Outlook, or custom SMTP servers
+- **Enhanced UI**: Streamlit interface with comprehensive alert management
+
+#### **Data Flow Enhancements**
+- **Alert Trigger**: Risk engine and zone analyzer feed enhanced alert system
+- **Snapshot Capture**: Automatic image upload to Cloudinary on alert events
+- **Email Delivery**: Multi-admin notifications with professional formatting
+- **Real-time Updates**: Live dashboard with auto-refresh every 3 seconds
+- **Configuration Management**: UI-based setup for all email and alert parameters
 
 ---
 
@@ -163,30 +221,40 @@ graph TB
 
 ```
 ICSS
-├── app.py                      # Main Streamlit application
-├── camera1.py                  # Mobile camera streaming (IP Webcam)
-├── requirements.txt            # Python dependencies
-├── README.md                   # Project documentation
-├── alert.md                    # Alert system setup guide
-├── env_example.txt              # Environment variables template
-├── crowd_data.db               # Local cache database (backup)
-│
-├── model/                      # AI model files
-│   ├── yolo11l.pt                  # YOLO v11 (51MB)
-│   └── V8l-haj.pt              # YOLO v8 (87MB)
-│
-├── utils/                      # Utility modules
-│   ├── detection.py            # Detection pipeline
-│   ├── tracker.py              # Deep SORT tracking
-│   ├── advanced_analytics.py   # Analytics integration
-│   ├── risk_engine.py          # Risk assessment
-│   ├── zone_analyzer.py        # Zone monitoring
-│   ├── flow_analyzer.py        # Flow analysis
-│   ├── csrnet_density.py       # CSRNet density estimation
-│   ├── crowd_visualization.py  # Visualization components
-│   ├── crowd_analytics.py      # Crowd behavior analysis
-│   ├── alert_manager.py        # Real-time alert system
-│   └── database.py           # Supabase integration
+|-- app.py                      # Main Streamlit application
+|-- camera1.py                  # Mobile camera streaming (IP Webcam)
+|-- requirements.txt            # Python dependencies
+|-- README.md                   # Project documentation
+|-- alert.md                    # Alert system setup guide
+|-- doubts.md                   # FAQ and troubleshooting guide
+|-- enhanced_alert_setup.md     # Enhanced alert system guide
+|-- email_setup_guide.md        # Complete email setup guide
+|-- env_example.txt              # Environment variables template
+|-- crowd_data.db               # Local cache database (backup)
+|
+|-- model/                      # AI model files
+|   |-- yolo11l.pt                  # YOLO v11 (51MB)
+|   |-- V8l-haj.pt              # YOLO v8 (87MB)
+|   -- yolo11m.pt              # YOLO v11 medium (optional)
+|
+|-- components/                 # UI components
+|   -- alert_tab.py             # Enhanced alert tab component
+|
+|-- utils/                      # Utility modules
+|   |-- detection.py            # Detection pipeline
+|   |-- tracker.py              # Deep SORT tracking
+|   |-- advanced_analytics.py   # Analytics integration
+|   |-- risk_engine.py          # Risk assessment
+|   |-- zone_analyzer.py        # Zone monitoring
+|   |-- flow_analyzer.py        # Flow analysis
+|   |-- csrnet_density.py       # CSRNet density estimation
+|   |-- crowd_visualization.py  # Visualization components
+|   |-- crowd_analytics.py      # Crowd behavior analysis
+|   |-- alert_manager.py        # Real-time alert system
+|   |-- alert_store.py          # Enhanced alert storage (Supabase)
+|   |-- email_config.py         # Email configuration and management
+|   |-- cloudinary_helper.py    # Cloudinary image upload helper
+|   -- database.py              # Supabase integration
 ```
 
 ---
@@ -492,32 +560,182 @@ Open **http://localhost:8501** in your browser.
 |-------|----------|
 | Connection failed | Check phone and PC are on same WiFi |
 | Black screen | Try different stream URL in settings |
-| Laggy feed | Reduce resolution or FPS in IP Webcam app |
-| Authentication error | Enter username/password if set in app |
 
 ---
 
-## Alert System Setup
+## Enhanced Alert System
+
+### Overview
+
+The ICSS Enhanced Alert System provides comprehensive real-time monitoring with multi-administrator email notifications, automatic snapshot capture, and professional alert formatting.
+
+### Key Features
+
+#### **Real-Time Alert Monitoring**
+- **Live Alert Dashboard**: Auto-refresh every 3 seconds
+- **Active Alerts Display**: Current critical and warning alerts
+- **Historical Alert Log**: Complete alert history with timestamps
+- **Alert Statistics**: Total alerts, active alerts, severity breakdown
+
+#### **Multi-Administrator Email System**
+- **Unlimited Recipients**: Support for multiple security teams
+- **Professional Email Format**: Structured alerts with detailed information
+- **Severity-Based Notifications**: Different alert levels (CRITICAL, HIGH, MEDIUM)
+- **Test Email Function**: Verify configuration before deployment
+
+#### **Cloudinary Snapshot Integration**
+- **Automatic Image Capture**: High-quality snapshots on alert trigger
+- **CDN Storage**: Fast image delivery via Cloudinary
+- **Email Integration**: Direct image links in alert emails
+- **30-Day Retention**: Automatic cleanup of old snapshots
+
+#### **Alert Types & Triggers**
+
+1. **Zone Overcrowding Alerts**
+   - **Trigger**: Zone capacity exceeded (>15 people per zone)
+   - **Severity**: HIGH (15-25 people), CRITICAL (>25 people)
+   - **Message**: "Zone A overcrowded! 25 people, 0.850 p/m²"
+
+2. **High Risk Level Alerts**
+   - **Trigger**: Global risk assessment reaches HIGH/CRITICAL
+   - **Threshold**: >25 people AND >0.8 p/m² density
+   - **Message**: "HIGH RISK detected! 45 people, density 1.250 p/m²"
+
+3. **Sudden Crowd Surge Alerts**
+   - **Trigger**: 50%+ increase in crowd count within 10 seconds
+   - **Severity**: CRITICAL
+   - **Message**: "CROWD SURGE! Count increased 75% rapidly"
+
+4. **Medium Risk Alerts (Mobile Camera)**
+   - **Trigger**: Medium risk level on mobile camera feed
+   - **Severity**: MEDIUM
+   - **Message**: "MEDIUM RISK - 12 people, density 0.450 p/m²"
+
+#### **Email Content Format**
+```
+ICSS ALERT NOTIFICATION
+==================================================
+
+ALERT TYPE: Zone Overcrowding
+SEVERITY: CRITICAL
+TIME: 2024-04-16 11:47:30
+
+MESSAGE:
+Zone A overcrowded! 35 people, 1.200 p/m²
+Threshold exceeded: 15 people max per zone
+
+SNAPSHOT: https://res.cloudinary.com/icss-alerts/alert_20240416_110530.jpg
+
+==================================================
+This is an automated alert from the Intelligent Crowd Surveillance System.
+For security, this email was sent to multiple administrators.
+```
+
+---
+
+## Email Setup Guide
 
 ### Quick Setup Checklist
 
-**✅ Email Alerts (Required for notifications)**
-- [ ] Enable Gmail 2-factor authentication
-- [ ] Generate Gmail App Password
-- [ ] Configure SMTP credentials in `.env`
-- [ ] Enable email alerts in Controls tab
+**Required Configuration**
+- [ ] Choose email provider (Gmail recommended)
+- [ ] Enable 2-factor authentication on email account
+- [ ] Generate App Password (Gmail) or use regular password
+- [ ] Configure SMTP credentials in ICSS interface
+- [ ] Add multiple administrator recipients
+- [ ] Send test email to verify setup
 
-**✅ SMS Alerts (Optional)**
-- [ ] Configure phone number and carrier in `.env`
-- [ ] Enable SMS alerts in Controls tab
-- [ ] Test SMS delivery
+**Environment Variables (.env)**
+```bash
+# SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USE_TLS=true
+SMTP_USERNAME=your-alerts@gmail.com
+SMTP_PASSWORD=your-gmail-app-password
 
-**✅ Environment Files**
-- [ ] Copy `env_example.txt` to `.env`
-- [ ] Edit `.env` with your credentials
-- [ ] Restart application after changes
+# Multiple Recipients (comma-separated)
+EMAIL_RECIPIENTS=admin1@company.com,admin2@company.com,security@company.com
 
-**📋 Detailed Guide**: See `alert.md` for complete step-by-step instructions
+# Cloudinary (for snapshots)
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+```
+
+### Gmail App Password Setup
+
+1. **Enable 2FA** on your Gmail account
+2. **Go to**: https://myaccount.google.com/apppasswords
+3. **Select app**: "Mail" and "Other (Custom name)"
+4. **Enter name**: "ICSS Alerts"
+5. **Generate**: Copy the 16-character password
+6. **Use this password** in SMTP_PASSWORD field
+
+### Multiple Administrator Setup
+
+**Recommended Recipient Structure**
+```bash
+EMAIL_RECIPIENTS=it-security@company.com,operations@company.com,management@company.com,emergency@company.com
+```
+
+**Role-Based Recipients**
+- **IT Security**: it-security@company.com
+- **Operations Team**: operations@company.com
+- **Management**: management@company.com
+- **Emergency Contact**: emergency@company.com
+- **On-call Engineer**: oncall@company.com
+
+### Configuration in ICSS Interface
+
+1. **Open ICSS application**
+2. **Go to "Alerts" tab**
+3. **Find "Email Configuration" section**
+4. **Configure SMTP settings**:
+   - SMTP Host: smtp.gmail.com
+   - SMTP Port: 587
+   - Use TLS: Checked
+   - Sender Email: your-alerts@gmail.com
+   - Sender Password: your-app-password
+5. **Add Recipients**: Comma-separated email addresses
+6. **Save Configuration**: Click "Save Email Configuration"
+7. **Test Setup**: Click "Send Test Email"
+
+**Detailed Guides**:
+- `enhanced_alert_setup.md` - Complete enhanced alert setup
+- `email_setup_guide.md` - Detailed email configuration
+- `doubts.md` - FAQ and troubleshooting
+
+---
+
+## Risk Level System
+
+### Risk Classifications
+
+| Level | Color | Condition | Threshold | Action |
+|-------|-------|-----------|-----------|--------|
+| **NORMAL** | Green | Low crowd density | < 5 people AND < 0.3 p/m² | Continue monitoring |
+| **AVERAGE** | Yellow | Moderate density | 5-15 people OR 0.3-0.7 p/m² | Increased monitoring |
+| **RISKY** | Red | High density | > 15 people OR > 0.7 p/m² | Prepare for intervention |
+
+### Risk Assessment Formula
+
+```python
+risk_score = (
+    density_weight * density_score +           # 40% weight
+    flow_conflict_weight * flow_conflict_score +  # 35% weight
+    speed_variation_weight * speed_variation_score  # 25% weight
+)
+```
+
+### Configurable Thresholds
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Low Density Threshold | 0.5 | Triggers "Average" risk |
+| Medium Density Threshold | 1.0 | Triggers "Risky" risk |
+| People Count Threshold | 8 | Number for "Risky" level |
+| Alert Cooldown | 60 seconds | Minimum time between alerts |
 
 ---
 
