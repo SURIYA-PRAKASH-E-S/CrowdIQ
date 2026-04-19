@@ -8,15 +8,13 @@ import os
 import sys
 from datetime import datetime
 from dotenv import load_dotenv
-from supabase import create_client
+from firebase_client import get_db
 
 class DatabaseStatusChecker:
     """Complete database status checker for ICSS"""
     
     def __init__(self):
-        self.client = None
-        self.url = ""
-        self.key = ""
+        self.db = None
         self.connected = False
         
     def load_credentials(self):
@@ -27,26 +25,35 @@ class DatabaseStatusChecker:
         load_dotenv()
         
         # Get credentials
-        self.url = os.environ.get("SUPABASE_URL", "").strip()
-        self.key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        database_url = os.environ.get("FIREBASE_DATABASE_URL", "").strip()
+        credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
         
-        print(f"URL: {self.url}")
-        print(f"Key: {'SET' if self.key else 'NOT SET'}")
+        print(f"Database URL: {database_url}")
+        print(f"Credentials Path: {credentials_path}")
+        print(f"Credentials File Exists: {os.path.exists(credentials_path) if credentials_path else 'N/A'}")
         
         # Check if credentials are valid
-        if not self.url or not self.key:
+        if not database_url or not credentials_path:
             print("STATUS: CREDENTIALS NOT CONFIGURED")
             print("\nSETUP INSTRUCTIONS:")
             print("1. Edit your .env file")
-            print("2. Add your Supabase URL and ANON key")
-            print("3. Restart this check")
+            print("2. Add your Firebase Database URL and service account path")
+            print("3. Download your service account JSON from Firebase Console")
+            print("4. Restart this check")
             return False
         
-        if "your-project-id" in self.url or "your-supabase-anon-key" in self.key:
+        if "your-project-id" in database_url or "firebase-service-account.json" in credentials_path and not os.path.exists(credentials_path):
             print("STATUS: PLACEHOLDER CREDENTIALS DETECTED")
             print("\nSETUP INSTRUCTIONS:")
             print("1. Replace placeholder values in .env")
-            print("2. Use your actual Supabase project URL and key")
+            print("2. Use your actual Firebase project URL and service account path")
+            return False
+        
+        if not os.path.exists(credentials_path):
+            print("STATUS: SERVICE ACCOUNT FILE NOT FOUND")
+            print("\nSETUP INSTRUCTIONS:")
+            print("1. Download service account JSON from Firebase Console")
+            print("2. Place it at the path specified in GOOGLE_APPLICATION_CREDENTIALS")
             return False
         
         return True
@@ -56,66 +63,63 @@ class DatabaseStatusChecker:
         print("\n=== CONNECTION TEST ===")
         
         try:
-            self.client = create_client(self.url, self.key)
-            print("SUCCESS: Supabase client created")
-            self.connected = True
-            return True
+            self.db = get_db()
+            if self.db:
+                print("SUCCESS: Firebase client created")
+                self.connected = True
+                return True
+            else:
+                print("ERROR: Firebase client is None")
+                self.connected = False
+                return False
         except Exception as e:
             print(f"ERROR: Connection failed - {e}")
             self.connected = False
             return False
     
     def check_table_structure(self):
-        """Check table structures and columns"""
-        print("\n=== TABLE STRUCTURE CHECK ===")
+        """Check collection structures and data"""
+        print("\n=== COLLECTION STRUCTURE CHECK ===")
         
         if not self.connected:
             print("ERROR: Not connected to database")
             return False
         
-        tables_status = {}
+        collections_status = {}
         
-        # Check crowd_metrics table
-        print("\nCROWD_METRICS table:")
+        # Check crowd_metrics collection
+        print("\nCROWD_METRICS collection:")
         try:
-            response = self.client.table('crowd_metrics').select('*').limit(1).execute()
-            if response.data:
-                columns = list(response.data[0].keys())
+            data = self.db.child('crowd_metrics').limit_to_first(1).get()
+            if data:
+                columns = list(data.values())[0].keys() if data else []
                 print(f"  STATUS: EXISTS")
-                print(f"  COLUMNS: {', '.join(columns)}")
-                tables_status['crowd_metrics'] = {'exists': True, 'columns': columns}
+                print(f"  FIELDS: {', '.join(columns)}")
+                collections_status['crowd_metrics'] = {'exists': True, 'fields': columns}
             else:
                 print("  STATUS: EXISTS (no data)")
-                tables_status['crowd_metrics'] = {'exists': True, 'columns': []}
+                collections_status['crowd_metrics'] = {'exists': True, 'fields': []}
         except Exception as e:
-            if "does not exist" in str(e):
-                print("  STATUS: NOT FOUND - Schema needs setup")
-                tables_status['crowd_metrics'] = {'exists': False, 'error': str(e)}
-            else:
-                print(f"  ERROR: {e}")
-                tables_status['crowd_metrics'] = {'exists': False, 'error': str(e)}
+            print(f"  ERROR: {e}")
+            collections_status['crowd_metrics'] = {'exists': False, 'error': str(e)}
         
-        # Check alerts table
-        print("\nALERTS table:")
+        # Check alerts collection
+        print("\nALERTS collection:")
         try:
-            response = self.client.table('alerts').select('*').limit(1).execute()
-            if response.data:
-                columns = list(response.data[0].keys())
+            data = self.db.child('alerts').limit_to_first(1).get()
+            if data:
+                columns = list(data.values())[0].keys() if data else []
                 print(f"  STATUS: EXISTS")
-                print(f"  COLUMNS: {', '.join(columns)}")
-                tables_status['alerts'] = {'exists': True, 'columns': columns}
+                print(f"  FIELDS: {', '.join(columns)}")
+                collections_status['alerts'] = {'exists': True, 'fields': columns}
             else:
                 print("  STATUS: EXISTS (no data)")
-                tables_status['alerts'] = {'exists': True, 'columns': []}
+                collections_status['alerts'] = {'exists': True, 'fields': []}
         except Exception as e:
-            if "does not exist" in str(e):
-                print("  STATUS: NOT FOUND - Schema needs setup")
-                tables_status['alerts'] = {'exists': False, 'error': str(e)}
-            else:
-                print(f"  ERROR: {e}")
-                tables_status['alerts'] = {'exists': False, 'error': str(e)}
+            print(f"  ERROR: {e}")
+            collections_status['alerts'] = {'exists': False, 'error': str(e)}
         
-        return tables_status
+        return collections_status
     
     def test_operations(self):
         """Test database insert and select operations"""
@@ -132,6 +136,7 @@ class DatabaseStatusChecker:
         try:
             # Insert test data
             test_data = {
+                'timestamp': datetime.utcnow().isoformat(),
                 'people_count': 15,
                 'density': 0.6,
                 'flow_direction': 'Test-Direction',
@@ -141,13 +146,13 @@ class DatabaseStatusChecker:
                 'average_count': 12.5
             }
             
-            insert_response = self.client.table('crowd_metrics').insert(test_data).execute()
-            record_id = insert_response.data[0]['id']
+            result = self.db.child('crowd_metrics').push(test_data)
+            record_id = result['name']  # Firebase returns the new key as 'name'
             print(f"  INSERT: SUCCESS (ID: {record_id})")
             
             # Select test data
-            select_response = self.client.table('crowd_metrics').select('*').eq('id', record_id).execute()
-            if select_response.data:
+            select_data = self.db.child('crowd_metrics').child(record_id).get()
+            if select_data:
                 print(f"  SELECT: SUCCESS")
                 operations_status['crowd_metrics'] = 'WORKING'
             else:
@@ -163,19 +168,20 @@ class DatabaseStatusChecker:
         try:
             # Insert test alert
             alert_data = {
+                'timestamp': datetime.utcnow().isoformat(),
                 'message': 'Test alert message for database check',
                 'severity': 'MEDIUM',
-                'people_count': 15,
+                'count': 15,
                 'density': 0.6
             }
             
-            alert_response = self.client.table('alerts').insert(alert_data).execute()
-            alert_id = alert_response.data[0]['id']
+            alert_result = self.db.child('alerts').push(alert_data)
+            alert_id = alert_result['name']
             print(f"  INSERT: SUCCESS (ID: {alert_id})")
             
             # Select test alert
-            alert_select = self.client.table('alerts').select('*').eq('id', alert_id).execute()
-            if alert_select.data:
+            alert_select = self.db.child('alerts').child(alert_id).get()
+            if alert_select:
                 print(f"  SELECT: SUCCESS")
                 operations_status['alerts'] = 'WORKING'
             else:
@@ -200,45 +206,47 @@ class DatabaseStatusChecker:
         
         try:
             # Get record counts
-            metrics_count = self.client.table('crowd_metrics').select('count', count='exact').execute()
-            alerts_count = self.client.table('alerts').select('count', count='exact').execute()
+            metrics_data = self.db.child('crowd_metrics').get()
+            alerts_data = self.db.child('alerts').get()
             
-            summary['total_metrics'] = metrics_count.count or 0
-            summary['total_alerts'] = alerts_count.count or 0
+            summary['total_metrics'] = len(metrics_data) if metrics_data else 0
+            summary['total_alerts'] = len(alerts_data) if alerts_data else 0
             
             print(f"Total crowd_metrics records: {summary['total_metrics']}")
             print(f"Total alerts records: {summary['total_alerts']}")
             
             # Get latest records
             if summary['total_metrics'] > 0:
-                latest_metrics = self.client.table('crowd_metrics').select('*').order('created_at', desc=True).limit(1).execute()
-                if latest_metrics.data:
-                    record = latest_metrics.data[0]
-                    summary['latest_metrics'] = {
-                        'people_count': record['people_count'],
-                        'risk_level': record['risk_level'],
-                        'density': record['density'],
-                        'timestamp': record['created_at']
-                    }
-                    print(f"\nLatest crowd metrics:")
-                    print(f"  People count: {record['people_count']}")
-                    print(f"  Risk level: {record['risk_level']}")
-                    print(f"  Density: {record['density']}")
-                    print(f"  Time: {record['created_at']}")
+                latest_metrics = self.db.child('crowd_metrics').order_by_child('timestamp').limit_to_last(1).get()
+                if latest_metrics:
+                    for key, record in latest_metrics.items():
+                        summary['latest_metrics'] = {
+                            'people_count': record['people_count'],
+                            'risk_level': record['risk_level'],
+                            'density': record['density'],
+                            'timestamp': record['timestamp']
+                        }
+                        print(f"\nLatest crowd metrics:")
+                        print(f"  People count: {record['people_count']}")
+                        print(f"  Risk level: {record['risk_level']}")
+                        print(f"  Density: {record['density']}")
+                        print(f"  Time: {record['timestamp']}")
+                        break
             
             if summary['total_alerts'] > 0:
-                latest_alerts = self.client.table('alerts').select('*').order('timestamp', desc=True).limit(1).execute()
-                if latest_alerts.data:
-                    record = latest_alerts.data[0]
-                    summary['latest_alert'] = {
-                        'message': record['message'],
-                        'severity': record['severity'],
-                        'timestamp': record['timestamp']
-                    }
-                    print(f"\nLatest alert:")
-                    print(f"  Message: {record['message'][:50]}...")
-                    print(f"  Severity: {record['severity']}")
-                    print(f"  Time: {record['timestamp']}")
+                latest_alerts = self.db.child('alerts').order_by_child('timestamp').limit_to_last(1).get()
+                if latest_alerts:
+                    for key, record in latest_alerts.items():
+                        summary['latest_alert'] = {
+                            'message': record['message'],
+                            'severity': record['severity'],
+                            'timestamp': record['timestamp']
+                        }
+                        print(f"\nLatest alert:")
+                        print(f"  Message: {record['message'][:50]}...")
+                        print(f"  Severity: {record['severity']}")
+                        print(f"  Time: {record['timestamp']}")
+                        break
             
             return summary
             
@@ -249,14 +257,13 @@ class DatabaseStatusChecker:
     def provide_setup_instructions(self):
         """Provide setup instructions if needed"""
         print("\n=== SETUP INSTRUCTIONS ===")
-        print("If tables are missing, run this SQL in your Supabase dashboard:")
-        print(f"1. Open: https://supabase.com/dashboard/project/{self.url.split('//')[1].split('.')[0]}/sql")
-        print("2. Copy the SQL from supabase_schema.sql")
-        print("3. Click 'Run' to create tables")
+        print("Firebase Realtime Database requires no schema setup.")
+        print("Collections are created automatically when you first write data.")
         print("\nFor credential issues:")
         print("1. Check your .env file")
-        print("2. Ensure SUPABASE_URL and SUPABASE_ANON_KEY are correct")
-        print("3. Restart the application")
+        print("2. Ensure FIREBASE_DATABASE_URL and GOOGLE_APPLICATION_CREDENTIALS are correct")
+        print("3. Ensure the service account JSON file exists at the specified path")
+        print("4. Restart the application")
     
     def run_full_check(self):
         """Run complete database status check"""
@@ -273,8 +280,8 @@ class DatabaseStatusChecker:
         if not self.test_connection():
             return False
         
-        # Step 3: Check table structure
-        table_status = self.check_table_structure()
+        # Step 3: Check collection structure
+        collection_status = self.check_table_structure()
         
         # Step 4: Test operations
         operations_status = self.test_operations()
@@ -287,15 +294,15 @@ class DatabaseStatusChecker:
         print("FINAL STATUS:")
         
         # Overall status
-        all_tables_exist = all(status.get('exists', False) for status in table_status.values())
+        all_collections_exist = all(status.get('exists', False) for status in collection_status.values())
         all_operations_work = all(status == 'WORKING' for status in operations_status.values())
         
-        if all_tables_exist and all_operations_work:
+        if all_collections_exist and all_operations_work:
             print("DATABASE: FULLY OPERATIONAL")
             print("Your ICSS application is ready to use!")
-        elif all_tables_exist:
+        elif all_collections_exist:
             print("DATABASE: PARTIALLY WORKING")
-            print("Tables exist but some operations may have issues")
+            print("Collections exist but some operations may have issues")
         else:
             print("DATABASE: NEEDS SETUP")
             self.provide_setup_instructions()

@@ -310,18 +310,30 @@ def calculate_density(people_count: int, frame_width: int, frame_height: int) ->
 
 # ================= RISK CLASSIFICATION SYSTEM =================
 def classify_risk(density: float, people_count: int,
-                 low_count_threshold: int = 5, medium_count_threshold: int = 15,
-                 low_density_threshold: float = 0.3, medium_density_threshold: float = 0.7) -> Tuple[str, Tuple[int, int, int]]:
+                 low_count_threshold: int = 5, medium_count_threshold: int = 9,
+                 low_density_threshold: float = 0.1, medium_density_threshold: float = 0.2) -> Tuple[str, Tuple[int, int, int]]:
     """
-    3-level risk classification system (EXACT LOGIC)
+    4-level risk classification system (PRIORITY: HIGH → MEDIUM → LOW → NORMAL)
     Returns: (risk_level, color_tuple)
     """
+    # Priority order: HIGH → MEDIUM → LOW → NORMAL
     if people_count >= medium_count_threshold or density >= medium_density_threshold:
-        return "HIGH RISK", (0, 0, 255)  # Red
+        level = "HIGH"
+        color = (255, 0, 0)  # Red
     elif people_count >= low_count_threshold or density >= low_density_threshold:
-        return "MEDIUM RISK", (0, 165, 255)  # Orange
+        level = "MEDIUM"
+        color = (0, 165, 255)  # Orange
+    elif people_count > 0:
+        level = "LOW"
+        color = (0, 255, 0)  # Green
     else:
-        return "LOW RISK", (0, 255, 0)  # Green
+        level = "NORMAL"
+        color = (200, 200, 200)  # Gray
+    
+    # Debug logging
+    print(f"[RISK DEBUG] Count={people_count}, Density={density:.3f} → Level={level}")
+    
+    return level, color
 
 # ================= LEGACY FUNCTION (for backward compatibility) =================
 def process_frame_legacy(frame, model):

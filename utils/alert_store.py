@@ -1,31 +1,40 @@
 """
-utils/alert_store.py — Enhanced alert storage for ICSS with Supabase integration
+utils/alert_store.py — Enhanced alert storage for ICSS with Firebase integration
 
 Handles real-time alert storage, retrieval, and settings management.
 """
 
 import logging
+import queue  # FIXED: Bug 3 Step A - add queue for thread-safe alert bridging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import pandas as pd
 
-from .database import _client, is_connected as db_is_connected
+from .database import get_db, is_connected as db_is_connected
 from .cloudinary_helper import upload_snapshot
+
+# === ICSS UPDATE: TASK 2 - Import streamlit for session_state ===
+try:
+    import streamlit as st
+except ImportError:
+    st = None
+
+# FIXED: Bug 3 Step A - module-level queue for thread-safe alert bridging
+_alert_queue = queue.Queue()
 
 logger = logging.getLogger(__name__)
 
 
 class AlertStore:
-    """Enhanced alert storage with Supabase integration"""
+    """Enhanced alert storage with Firebase integration"""
     
     def __init__(self):
-        self._client = _client
         self._cache_timeout = 5  # Cache alerts for 5 seconds
         self._last_cache_update = None
         self._cached_alerts = []
     
     def is_connected(self) -> bool:
-        """Check if Supabase is connected"""
+        """Check if Firebase is connected"""
         return db_is_connected()
     
     def insert_alert(
@@ -41,7 +50,7 @@ class AlertStore:
         email_sent: bool = False
     ) -> bool:
         """
-        Insert enhanced alert into Supabase alerts table
+        Insert enhanced alert into Firebase alerts collection
         
         Args:
             alert_type: Type of alert (e.g., "Zone Overcrowded", "High Risk")
@@ -58,7 +67,7 @@ class AlertStore:
             True if successful, False otherwise
         """
         if not self.is_connected():
-            logger.warning("Cannot insert alert: Supabase not connected")
+            logger.warning("Cannot insert alert: Firebase not connected")
             return False
         
         if timestamp is None:
@@ -66,41 +75,101 @@ class AlertStore:
         
         # Build alert data
         alert_data = {
+            "timestamp": timestamp,
             "type": alert_type,
             "severity": severity,
             "zone": zone,
             "count": count,
             "density": density,
             "message": message,
-            "timestamp": timestamp,
             "image_url": image_url,
             "email_sent": email_sent
         }
         
-        # Remove None values to avoid SQL issues
+        # Remove None values
         alert_data = {k: v for k, v in alert_data.items() if v is not None}
         
         try:
-            # Try full schema first
-            response = self._client.table("alerts").insert(alert_data).execute()
+            db = get_db()
+            db.child("alerts").push(alert_data)
             logger.info(f"Alert inserted successfully: {alert_type}")
             return True
             
         except Exception as e:
-            # Try fallback with minimal columns
+            logger.error(f"Failed to insert alert: {e}")
+            return False
+    
+    # === ICSS UPDATE: TASK 2 - Add method to store alerts in session_state and database ===
+    def add_alert(self, alert_data: Dict[str, Any]) -> bool:
+        """
+        Add alert to both session_state (in-memory) and Firebase/SQLite database.
+        
+        Args:
+            alert_data: Alert dictionary with alert fields
+            
+        Returns:
+            True if successful (at least one storage succeeded), False otherwise
+        """
+        # Initialize session_state alert_history and alerts_list if not exists
+        if st is not None:
+            if "alert_history" not in st.session_state:
+                st.session_state["alert_history"] = []
+            if "alerts_list" not in st.session_state:
+                st.session_state["alerts_list"] = []
+        
+        # Add timestamp if not provided
+        if "timestamp" not in alert_data:
+            alert_data["timestamp"] = datetime.utcnow().isoformat()
+        
+        # Add to session_state (in-memory for real-time dashboard display)
+        success = False
+        if st is not None:
             try:
-                minimal_data = {
-                    "message": message,
-                    "severity": severity,
-                    "type": alert_type
-                }
-                response = self._client.table("alerts").insert(minimal_data).execute()
-                logger.info(f"Alert inserted with minimal schema: {alert_type}")
-                return True
+                # Add to alert_history (legacy)
+                st.session_state["alert_history"].insert(0, alert_data)
+                # Cap at last 100 alerts to prevent memory issues
+                if len(st.session_state["alert_history"]) > 100:
+                    st.session_state["alert_history"] = st.session_state["alert_history"][:100]
                 
-            except Exception as e2:
-                logger.error(f"Failed to insert alert: {e2}")
-                return False
+                # Add to alerts_list (used by alert_tab.py)
+                st.session_state["alerts_list"].insert(0, alert_data)
+                # Cap at last 100 alerts to prevent memory issues
+                if len(st.session_state["alerts_list"]) > 100:
+                    st.session_state["alerts_list"] = st.session_state["alerts_list"][:100]
+                
+                # Update refresh timestamp
+                st.session_state["last_alert_refresh"] = datetime.now().timestamp()
+                success = True
+                logger.info(f"Alert added to session_state: {alert_data.get('type', 'Unknown')}")
+                
+                # FIXED: Bug 3 Step B - also put in queue for main thread consumption
+                try:
+                    _alert_queue.put_nowait(alert_data)
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"Failed to add alert to session_state: {e}")
+        
+        # Also store to Firebase/SQLite for persistence
+        try:
+            # Extract fields for insert_alert
+            db_success = self.insert_alert(
+                alert_type=alert_data.get("type", "Alert"),
+                severity=alert_data.get("severity", "MEDIUM"),
+                zone=alert_data.get("zone"),
+                count=alert_data.get("count", 0),
+                density=alert_data.get("density", 0.0),
+                message=alert_data.get("message", ""),
+                image_url=alert_data.get("image_url"),
+                timestamp=alert_data.get("timestamp"),
+                email_sent=alert_data.get("email_sent", False)
+            )
+            if db_success:
+                success = True
+        except Exception as e:
+            logger.error(f"Failed to add alert to database: {e}")
+        
+        return success
     
     def get_active_alerts(self, minutes: int = 5) -> List[Dict]:
         """
@@ -122,17 +191,37 @@ class AlertStore:
             return self._cached_alerts
         
         try:
+            db = get_db()
             # Calculate cutoff time
             cutoff_time = (datetime.utcnow() - timedelta(minutes=minutes)).isoformat()
             
-            # Query alerts
-            response = self._client.table("alerts")\
-                .select("*")\
-                .gte("timestamp", cutoff_time)\
-                .order("timestamp", desc=True)\
-                .execute()
+            # Query alerts - Firebase doesn't have direct gte, so we fetch more and filter
+            # For simplicity, fetch recent 100 and filter in Python
+            try:
+                data = db.child("alerts").order_by_child("timestamp").limit_to_last(100).get()
+            except Exception as exc:
+                # Check if it's an index error
+                error_msg = str(exc)
+                if "index" in error_msg.lower() or "Index not defined" in error_msg:
+                    logger.warning("Index not defined for alerts, falling back to fetch all data")
+                    data = db.child("alerts").get()
+                else:
+                    raise
             
-            alerts = response.data or []
+            if not data:
+                return []
+            
+            # Filter and convert to list
+            alerts = []
+            for key, row in data.items():
+                row["id"] = key
+                # Filter by timestamp
+                alert_time = row.get("timestamp", "")
+                if alert_time >= cutoff_time:
+                    alerts.append(row)
+            
+            # Sort by timestamp descending
+            alerts.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
             
             # Update cache
             self._cached_alerts = alerts
@@ -158,13 +247,37 @@ class AlertStore:
             return pd.DataFrame()
         
         try:
-            response = self._client.table("alerts")\
-                .select("*")\
-                .order("timestamp", desc=True)\
-                .limit(limit)\
-                .execute()
+            db = get_db()
+            try:
+                data = db.child("alerts").order_by_child("timestamp").limit_to_last(limit).get()
+            except Exception as exc:
+                # Check if it's an index error
+                error_msg = str(exc)
+                if "index" in error_msg.lower() or "Index not defined" in error_msg:
+                    logger.warning("Index not defined for alerts, falling back to fetch all data")
+                    all_data = db.child("alerts").get()
+                    if not all_data:
+                        return pd.DataFrame()
+                    # Sort by timestamp descending and limit
+                    alerts = []
+                    for key, row in all_data.items():
+                        row["id"] = key
+                        alerts.append(row)
+                    alerts.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+                    return pd.DataFrame(alerts[:limit])
+                else:
+                    raise
             
-            alerts = response.data or []
+            if not data:
+                return pd.DataFrame()
+            
+            # Convert to list and reverse
+            alerts = []
+            for key, row in data.items():
+                row["id"] = key
+                alerts.append(row)
+            
+            alerts.reverse()
             return pd.DataFrame(alerts)
             
         except Exception as e:
@@ -189,11 +302,10 @@ class AlertStore:
             }
         
         try:
+            db = get_db()
             # Get total count
-            total_response = self._client.table("alerts")\
-                .select("id", count="exact")\
-                .execute()
-            total_alerts = total_response.count or 0
+            data = db.child("alerts").get()
+            total_alerts = len(data) if data else 0
             
             # Get active alerts (last 5 minutes)
             active_alerts = self.get_active_alerts(5)
@@ -226,7 +338,7 @@ class AlertStore:
     
     def update_email_setting(self, enabled: bool) -> bool:
         """
-        Update email alert setting in Supabase settings table
+        Update email alert setting in Firebase settings collection
         
         Args:
             enabled: Whether email alerts should be enabled
@@ -238,16 +350,14 @@ class AlertStore:
             return False
         
         try:
+            db = get_db()
             # Upsert email setting
             setting_data = {
-                "key": "email_enabled",
                 "value": str(enabled),
                 "updated_at": datetime.utcnow().isoformat()
             }
             
-            response = self._client.table("settings")\
-                .upsert(setting_data, on_conflict="key")\
-                .execute()
+            db.child("settings").child("email_enabled").set(setting_data)
             
             logger.info(f"Email setting updated: {enabled}")
             return True
@@ -258,7 +368,7 @@ class AlertStore:
     
     def get_email_setting(self) -> bool:
         """
-        Get email alert setting from Supabase settings table
+        Get email alert setting from Firebase settings collection
         
         Returns:
             True if email alerts are enabled, False otherwise
@@ -267,14 +377,11 @@ class AlertStore:
             return False
         
         try:
-            response = self._client.table("settings")\
-                .select("value")\
-                .eq("key", "email_enabled")\
-                .single()\
-                .execute()
+            db = get_db()
+            setting = db.child("settings").child("email_enabled").get()
             
-            if response.data:
-                value = response.data.get('value', 'false')
+            if setting:
+                value = setting.get('value', 'false')
                 return value.lower() in ('true', '1', 'yes', 'on')
             
             return False
@@ -356,3 +463,21 @@ def insert_enhanced_alert(
         timestamp=datetime.utcnow().isoformat(),
         email_sent=False
     )
+
+
+# FIXED: Bug 3 Step C - drain_alert_queue() function to consume alerts from queue
+def drain_alert_queue() -> List[Dict[str, Any]]:
+    """
+    Drain all alerts from the thread-safe queue and return them.
+    Should be called from the main Streamlit thread to update session_state.
+    
+    Returns:
+        List of alert dictionaries
+    """
+    alerts = []
+    try:
+        while True:
+            alerts.append(_alert_queue.get_nowait())
+    except queue.Empty:
+        pass
+    return alerts

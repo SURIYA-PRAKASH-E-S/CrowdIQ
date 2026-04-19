@@ -38,7 +38,7 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 - **Density Estimation** - CSRNet neural network for heatmap generation
 - **Zone-based Analysis** - Grid-based risk highlighting
 - **Advanced Analytics** - Intelligent risk assessment, flow analysis
-- **Cloud Storage** - Supabase for cloud analytics and data persistence
+- **Cloud Storage** - Firebase Realtime Database for cloud analytics and data persistence
 - **Enhanced Alert System** - Real-time alerts with email notifications and snapshots
 - **Multi-Admin Email Setup** - Support for multiple administrators and security teams
 - **Cloudinary Integration** - Automatic snapshot capture and CDN storage
@@ -117,7 +117,7 @@ A comprehensive real-time crowd monitoring and analysis system powered by AI/ML 
 | **Computer Vision** | OpenCV, YOLO v11, YOLO v8 |
 | **AI/ML** | PyTorch, Ultralytics, CSRNet |
 | **Tracking** | Deep SORT |
-| **Database** | Supabase (cloud analytics) |
+| **Database** | Firebase Realtime Database (cloud analytics) |
 | **Email Services** | SMTP, Gmail, Outlook, Custom SMTP |
 | **Cloud Storage** | Cloudinary (image CDN) |
 | **Video Processing** | PyAV (av library) |
@@ -152,14 +152,14 @@ graph TB
 
     subgraph "Enhanced Alert System"
         L[Enhanced Alert Tab<br/>Live Dashboard]
-        M[Alert Store<br/>Supabase Integration]
+        M[Alert Store<br/>Firebase Integration]
         N[Email Manager<br/>Multi-Admin SMTP]
         O[Cloudinary Helper<br/>Snapshot Upload]
         P[Email Configuration<br/>UI Setup]
     end
 
     subgraph "Storage & Services"
-        Q[Supabase<br/>Cloud Database]
+        Q[Firebase<br/>Realtime Database]
         R[Cloudinary<br/>Image CDN]
         S[SMTP Services<br/>Gmail/Outlook/Custom]
         T[Streamlit UI<br/>Enhanced Interface]
@@ -203,20 +203,20 @@ graph TB
 2. **Detection Layer**: Dual YOLO models (v11 + v8) for person detection, CSRNet for dense crowd density estimation
 3. **Tracking & Analytics Layer**: Deep SORT for tracking, Risk Engine for assessment, Zone/Flow analyzers for spatial analysis
 4. **Enhanced Alert System**: Comprehensive alert management with live dashboard, multi-admin email, snapshot capture, and professional formatting
-5. **Storage & Services Layer**: Supabase for cloud analytics, Cloudinary for image CDN, SMTP services for email delivery
+5. **Storage & Services Layer**: Firebase Realtime Database for cloud analytics, Cloudinary for image CDN, SMTP services for email delivery
 6. **Visualization Layer**: Enhanced Streamlit UI with real-time monitoring and comprehensive configuration options
 
 ### New Architecture Components
 
 #### **Enhanced Alert System Layer**
 - **Enhanced Alert Tab**: Live dashboard with auto-refresh and real-time monitoring
-- **Alert Store**: Supabase integration for persistent alert storage and retrieval
+- **Alert Store**: Firebase integration for persistent alert storage and retrieval
 - **Email Manager**: Multi-administrator SMTP support with Gmail/Outlook/Custom providers
 - **Cloudinary Helper**: Automatic snapshot capture and CDN upload on alert trigger
 - **Email Configuration**: Complete UI-based SMTP setup and recipient management
 
 #### **Storage & Services Layer**
-- **Supabase**: Cloud database for analytics, metrics, and alert history
+- **Firebase Realtime Database**: Cloud database for analytics, metrics, and alert history
 - **Cloudinary**: Image CDN for alert snapshots with automatic cleanup
 - **SMTP Services**: Email delivery through Gmail, Outlook, or custom SMTP servers
 - **Enhanced UI**: Streamlit interface with comprehensive alert management
@@ -264,10 +264,10 @@ ICSS
 |   |-- crowd_visualization.py  # Visualization components
 |   |-- crowd_analytics.py      # Crowd behavior analysis
 |   |-- alert_manager.py        # Real-time alert system
-|   |-- alert_store.py          # Enhanced alert storage (Supabase)
+|   |-- alert_store.py          # Enhanced alert storage (Firebase)
 |   |-- email_config.py         # Email configuration and management
 |   |-- cloudinary_helper.py    # Cloudinary image upload helper
-|   -- database.py              # Supabase integration
+|   -- database.py              # Firebase integration
 ```
 
 ---
@@ -394,7 +394,7 @@ Open **http://localhost:8501** in your browser.
    - Monitor overcrowded areas
 
 5. **View Historical Data** (Tab 4: Cloud DB)
-   - Check stored analytics from Supabase cloud database
+   - Check stored analytics from Firebase cloud database
    - View trends and statistics
 
 6. **Configure Settings** (Tab 5: Controls)
@@ -507,7 +507,7 @@ Open **http://localhost:8501** in your browser.
    - Only CRITICAL alerts trigger SMS
 
 5. **Database Configuration** (Recommended, for cloud storage)
-   - Configure Supabase credentials in .env
+   - Configure Firebase credentials in .env
    - Required for cloud data persistence and real-time sync
    - Local cache used as backup when cloud unavailable
 
@@ -546,6 +546,287 @@ Open **http://localhost:8501** in your browser.
 | Max Age | 30 | Track persistence (frames) |
 | N Init | 5 | Track confirmation threshold |
 | NMS Max Overlap | 0.3 | Detection overlap threshold |
+
+---
+
+## Firebase Realtime Database Setup
+
+### Overview
+
+ICSS uses Firebase Realtime Database for cloud storage of analytics data and alert history. Firebase provides real-time synchronization, automatic scaling, and a generous free tier.
+
+### Prerequisites
+
+- A Google account
+- Access to Firebase Console (https://console.firebase.google.com)
+
+### Step 1: Create a Firebase Project
+
+1. Go to [Firebase Console](https://console.firebase.google.com)
+2. Click **"Add project"**
+3. Enter a project name (e.g., `icss-surveillance`)
+4. Accept the Firebase terms and conditions
+5. **Important**: Disable Google Analytics for this project (not needed for ICSS)
+6. Click **"Create project"**
+7. Wait for the project to be created (may take a minute)
+
+### Step 2: Enable Realtime Database
+
+1. In the Firebase Console, select your newly created project
+2. In the left sidebar, click **"Build"** → **"Realtime Database"**
+3. Click **"Create Database"**
+4. Select a location for your database (choose a location closest to your users)
+5. Click **"Next"**
+6. **Security Rules**: Select **"Start in test mode"** for now (we'll update this later)
+7. Click **"Enable"**
+
+### Step 3: Configure Database Rules
+
+#### For Development (Test Mode)
+
+Firebase will automatically start with test mode rules:
+
+```json
+{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}
+```
+
+**Warning**: Test mode allows anyone to read and write your database. Only use this for development!
+
+#### For Production (Recommended)
+
+When you're ready to deploy, update the rules in the Firebase Console:
+
+1. Go to **Realtime Database** → **Rules** tab
+2. Replace the rules with:
+
+```json
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "crowd_metrics": {
+      ".indexOn": ["timestamp"],
+      "$pushId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "alerts": {
+      ".indexOn": ["timestamp"],
+      "$pushId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "settings": {
+      ".read": true,
+      ".write": true,
+      "$key": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
+```
+
+**Note**: For production, you should implement proper authentication and more granular rules.
+
+### Step 4: Get Database URL
+
+1. In the Firebase Console, go to **Project Settings** (gear icon in left sidebar)
+2. Scroll down to the **"Your apps"** section
+3. Note your **Project ID** (it looks like: `icss-surveillance-12345`)
+4. Your Realtime Database URL will be:
+   ```
+   https://<project-id>-default-rtdb.firebaseio.com
+   ```
+   For example: `https://icss-surveillance-12345-default-rtdb.firebaseio.com`
+
+### Step 5: Download Service Account Key
+
+1. In the Firebase Console, go to **Project Settings** → **Service Accounts**
+2. Click **"Generate new private key"**
+3. A warning dialog will appear - read it carefully
+4. Click **"Generate key"**
+5. The JSON file will be downloaded automatically
+6. **Rename the file** to `firebase-service-account.json`
+7. **Move the file** to your ICSS project root directory (same level as `app.py`)
+
+**Security Warning**: Never commit this file to version control! It gives full administrative access to your Firebase project.
+
+### Step 6: Configure Environment Variables
+
+1. Copy `env_example.txt` to `.env`:
+   ```bash
+   cp env_example.txt .env
+   ```
+
+2. Edit `.env` and add your Firebase credentials:
+
+   ```env
+   # FIREBASE REALTIME DATABASE
+   FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
+   GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
+   ```
+
+3. Replace `your-project-id` with your actual Firebase project ID from Step 4
+
+### Step 7: Deploy Firebase Security Rules
+
+#### Method 1: Firebase Console (Recommended for Quick Setup)
+
+1. Go to [Firebase Console](https://console.firebase.google.com/)
+2. Select your project
+3. Navigate to **Realtime Database** → **Rules** tab
+4. Copy the production rules from Step 3
+5. Paste into the rules editor
+6. Click **Publish**
+
+#### Method 2: Firebase CLI (Recommended for Production)
+
+1. Install Firebase CLI:
+   ```bash
+   npm install -g firebase-tools
+   ```
+
+2. Login to Firebase:
+   ```bash
+   firebase login
+   ```
+
+3. Initialize Firebase in your project (if not already done):
+   ```bash
+   firebase init
+   ```
+   - Select **Realtime Database**
+   - Use existing project or create new one
+   - Select "No" for file overwrite
+
+4. Deploy rules:
+   ```bash
+   firebase deploy --only database:rules
+   ```
+
+### Step 8: Test the Connection
+
+Run the application:
+
+```bash
+streamlit run app.py
+```
+
+The application should start without any Firebase-related warnings. You can verify the connection in the **Cloud DB** tab.
+
+### Database Structure
+
+Firebase Realtime Database uses a JSON tree structure. ICSS uses these collections:
+
+#### crowd_metrics
+
+```json
+{
+  "crowd_metrics": {
+    "-Nz1234567890abc": {
+      "timestamp": "2026-04-17T19:30:00.000Z",
+      "people_count": 15,
+      "density": 0.6,
+      "flow_direction": "North",
+      "risk_level": "Medium",
+      "crowd_level": "Moderate",
+      "peak_count": 20,
+      "average_count": 12.5
+    }
+  }
+}
+```
+
+#### alerts
+
+```json
+{
+  "alerts": {
+    "-Mz9876543210xyz": {
+      "timestamp": "2026-04-17T19:30:00.000Z",
+      "type": "Zone Overcrowded",
+      "severity": "HIGH",
+      "zone": "Zone A",
+      "count": 25,
+      "density": 1.2,
+      "message": "Zone A is overcrowded",
+      "image_url": "https://res.cloudinary.com/...",
+      "email_sent": false
+    }
+  }
+}
+```
+
+#### settings
+
+```json
+{
+  "settings": {
+    "email_enabled": {
+      "value": "true",
+      "updated_at": "2026-04-17T19:30:00.000Z"
+    }
+  }
+}
+```
+
+### Troubleshooting Firebase
+
+#### "Service account file not found"
+
+**Solution**: 
+- Ensure `firebase-service-account.json` exists in the project root
+- Check that the path in `.env` matches the actual file location
+- Use absolute path if relative path doesn't work: `C:/path/to/firebase-service-account.json`
+
+#### "Firebase is not configured" warning in app
+
+**Solution**:
+- Verify `.env` file exists and is in the project root
+- Check that `FIREBASE_DATABASE_URL` and `GOOGLE_APPLICATION_CREDENTIALS` are set
+- Restart the Streamlit app after updating `.env`
+
+#### "Permission denied" errors
+
+**Solution**:
+- Check your Realtime Database rules in Firebase Console
+- Ensure you're in test mode during development
+- Verify the service account has the correct permissions
+
+#### "Index not defined" errors
+
+**Solution**:
+- Deploy the security rules with indexes from Step 3
+- The app includes automatic fallback for index errors
+- Performance may be slower without indexes, but the app continues to work
+
+### Security Best Practices
+
+1. **Never commit service account keys** to version control
+2. **Use different environments** for development and production
+3. **Implement proper authentication** in production rules
+4. **Regularly rotate service account keys**
+5. **Monitor database usage** in Firebase Console
+6. **Set up alerts** for unusual activity
+
+### Cost Considerations
+
+Firebase Realtime Database has a generous free tier:
+
+- **Free tier**: 100 simultaneous connections, 1 GB stored data, 10 GB/month downloaded
+- **Pricing**: Pay-as-you-go beyond free tier
+- **ICSS usage**: Typically stays within free tier for small deployments
+
+Monitor your usage in the Firebase Console under **Usage and Billing**.
 
 ---
 
@@ -855,7 +1136,7 @@ The ICSS system now provides comprehensive manual control over alert levels and 
 - **Frame Skipping**: Process every 3rd frame
 - **Resolution Scaling**: Adaptive 640x480 target
 - **Cached Model Loading**: @st.cache_resource
-- **Non-blocking Database**: Async Supabase inserts with local cache
+- **Non-blocking Database**: Async Firebase inserts with local cache
 
 ---
 
@@ -889,12 +1170,12 @@ The ICSS system now provides comprehensive manual control over alert levels and 
 
 **Solution**: This warning can be ignored - it's expected behavior in async video processing.
 
-#### 5. Supabase Connection Errors
+#### 5. Firebase Connection Errors
 
 **Solution**: 
-- Check SUPABASE_URL and SUPABASE_ANON_KEY in .env
-- Verify Supabase project is active
-- Check network connectivity to Supabase
+- Check FIREBASE_DATABASE_URL and GOOGLE_APPLICATION_CREDENTIALS in .env
+- Verify Firebase project is active
+- Check network connectivity to Firebase
 - Review console for detailed error messages
 
 ---
@@ -910,7 +1191,7 @@ opencv-python>=4.8.0
 ultralytics>=8.0.0
 numpy>=1.24.0
 av>=10.0.0
-supabase>=1.0.0
+firebase-admin==6.5.0
 plotly>=5.15.0
 pandas>=2.0.0
 ```
@@ -970,11 +1251,11 @@ deep-sort-realtime  # For Deep SORT tracking
 
 ## Data Storage
 
-### Supabase Database
+### Firebase Realtime Database
 
-- **Type**: Cloud-based PostgreSQL database
-- **Connection**: REST API via Supabase client
-- **Schema**:
+- **Type**: Cloud-based NoSQL real-time database
+- **Connection**: Firebase Admin SDK
+- **Structure:
 
 ```sql
 CREATE TABLE crowd_metrics (

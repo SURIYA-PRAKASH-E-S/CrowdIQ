@@ -1,0 +1,28 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "crowd_metrics": {
+      ".indexOn": ["timestamp"],
+      "$pushId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "alerts": {
+      ".indexOn": ["timestamp"],
+      "$pushId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "settings": {
+      ".read": true,
+      ".write": true,
+      "$key": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

@@ -458,6 +458,119 @@ def draw_zone_grid(
     return annotated
 
 
+# === ICSS UPDATE: TASK 1 - Formula-based crowd metrics calculation ===
+
+def calculate_crowd_metrics(
+    density: float,
+    tracks: list = None,
+    frame_area: float = None,
+    d_critical: float = 1.5,
+    alpha: float = 0.40,
+    beta: float = 0.35,
+    gamma: float = 0.25,
+    pixel_to_meter: float = 0.01
+) -> dict:
+    """
+    Calculate formula-based crowd metrics including flow rate, congestion index, and risk score.
+    
+    Formulas:
+    - Flow Rate: Q = D × V
+    - Congestion Index: C = D / D_critical
+    - Risk Score: R = αD + βQ + γC
+    
+    Args:
+        density: Crowd density (people per m²)
+        tracks: List of Deep SORT track objects with velocity information
+        frame_area: Frame area in m² (optional, for velocity calculation)
+        d_critical: Critical density threshold (default 1.5 p/m²)
+        alpha: Density weight (default 0.40)
+        beta: Flow rate weight (default 0.35)
+        gamma: Congestion weight (default 0.25)
+        pixel_to_meter: Scale factor for pixel to meter conversion (default 0.01)
+        
+    Returns:
+        Dictionary with calculated metrics:
+        {
+            "flow_rate": Q (people per second per meter),
+            "velocity": V (m/s),
+            "congestion_index": C,
+            "risk_score": R (0.0 to 1.0),
+            "is_dangerous": bool,
+            "formula_risk_level": str
+        }
+    """
+    # Compute velocity V from tracks
+    velocity = 0.5  # Default velocity if no tracks available
+    if tracks and len(tracks) > 0:
+        velocities = []
+        for track in tracks:
+            try:
+                # Try to get velocity from track object
+                if hasattr(track, 'velocity'):
+                    v = track.velocity
+                    if v is not None:
+                        velocities.append(abs(v))
+                elif isinstance(track, dict) and 'velocity' in track:
+                    v = track['velocity']
+                    if v is not None:
+                        velocities.append(abs(v))
+                elif isinstance(track, dict) and 'prev_position' in track and 'position' in track:
+                    # Compute velocity from position changes
+                    prev_pos = track['prev_position']
+                    curr_pos = track['position']
+                    if prev_pos and curr_pos:
+                        dx = curr_pos[0] - prev_pos[0]
+                        dy = curr_pos[1] - prev_pos[1]
+                        pixel_distance = (dx**2 + dy**2)**0.5
+                        # Convert pixels/frame to m/s (assuming ~30 fps)
+                        v = (pixel_distance * pixel_to_meter) * 30
+                        velocities.append(v)
+            except Exception:
+                continue
+        
+        if velocities:
+            velocity = sum(velocities) / len(velocities)
+    
+    # Compute flow rate Q = D × V
+    flow_rate = density * velocity
+    
+    # Compute congestion index C = D / D_critical
+    congestion_index = density / d_critical if d_critical > 0 else 0
+    
+    # Compute normalized values
+    d_norm = min(density / d_critical, 1.0) if d_critical > 0 else 0
+    q_norm = min(flow_rate / 5.0, 1.0)  # max_expected_flow = 5.0
+    c_norm = min(congestion_index, 1.0)
+    
+    # Compute risk score R = αD + βQ + γC
+    risk_score = alpha * d_norm + beta * q_norm + gamma * c_norm
+    
+    # Clamp risk score to [0.0, 1.0]
+    risk_score = max(0.0, min(1.0, risk_score))
+    
+    # Determine if dangerous
+    is_dangerous = congestion_index > 1.0
+    
+    # Determine formula risk level
+    if is_dangerous:
+        formula_risk_level = "DANGEROUS"
+    elif risk_score > 0.7:
+        formula_risk_level = "HIGH"
+    elif risk_score > 0.4:
+        formula_risk_level = "MEDIUM"
+    else:
+        formula_risk_level = "LOW"
+    
+    return {
+        "flow_rate": round(flow_rate, 4),
+        "velocity": round(velocity, 4),
+        "congestion_index": round(congestion_index, 4),
+        "risk_score": round(risk_score, 4),
+        "is_dangerous": is_dangerous,
+        "formula_risk_level": formula_risk_level
+    }
+
+
 def init_crowd_analytics(**kwargs) -> CrowdAnalytics:
     """Initialize CrowdAnalytics instance"""
     return CrowdAnalytics(**kwargs)
