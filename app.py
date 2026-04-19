@@ -475,6 +475,25 @@ class VideoProcessor(VideoTransformerBase):
                 people_count = tracking_result['people_count']
                 density = tracking_result['density']
                 
+                # === CSRNet Integration for Dense Crowd Accuracy ===
+                # Use CSRNet density estimation if enabled and available
+                if session_manager.get_data('enable_csrnet', True):
+                    try:
+                        from utils.csrnet_density import init_density_estimator
+                        if 'csrnet_estimator' not in st.session_state:
+                            st.session_state.csrnet_estimator = init_density_estimator()
+                        
+                        csrnet = st.session_state.csrnet_estimator
+                        if csrnet and csrnet.is_available():
+                            # Use CSRNet density instead of YOLO-based density
+                            csrnet_density, csrnet_count = csrnet.estimate_density(processed_img)
+                            density = csrnet_density  # Override YOLO density
+                            people_count = csrnet_count  # Override YOLO count
+                            print(f"[CSRNet] Using CSRNet: density={density:.4f}, count={people_count}")
+                    except Exception as e:
+                        print(f"[CSRNet] Inference failed: {e}, falling back to YOLO density")
+                        # Fall back to YOLO-based density (already set above)
+                
                 # Recalculate risk with default thresholds
                 risk_level, risk_color = classify_risk(
                     density, 
@@ -1217,6 +1236,25 @@ with tab1:
                                 model_v11m=model_v11m_local
                             )
 
+                            # === CSRNet Integration for Mobile Camera ===
+                            # Use CSRNet density estimation if enabled and available
+                            if st.session_state.get('enable_csrnet', True):
+                                try:
+                                    from utils.csrnet_density import init_density_estimator
+                                    if 'csrnet_estimator' not in st.session_state:
+                                        st.session_state.csrnet_estimator = init_density_estimator()
+                                    
+                                    csrnet = st.session_state.csrnet_estimator
+                                    if csrnet and csrnet.is_available():
+                                        # Use CSRNet density instead of YOLO-based density
+                                        csrnet_density, csrnet_count = csrnet.estimate_density(raw_frame.copy())
+                                        result['density'] = csrnet_density  # Override YOLO density
+                                        result['people_count'] = csrnet_count  # Override YOLO count
+                                        print(f"[MOBILE CSRNet] Using CSRNet: density={csrnet_density:.4f}, count={csrnet_count}")
+                                except Exception as e:
+                                    print(f"[MOBILE CSRNet] Inference failed: {e}, falling back to YOLO density")
+                                    # Fall back to YOLO-based density (already in result)
+
                             # RULE B - Hard cap of 8 people for mobile camera
                             result['people_count'] = min(result['people_count'], 8)
 
@@ -1286,6 +1324,23 @@ with tab1:
                                 process_alert(alert_data)
                             except Exception:
                                 pass
+
+                            # === Calculate formula metrics for mobile camera ===
+                            try:
+                                tracked_objects = result.get('tracked_objects', [])
+                                formula_metrics = calculate_crowd_metrics(
+                                    density=result.get('density', 0.0),
+                                    tracks=tracked_objects,
+                                    frame_area=None,
+                                    d_critical=1.5,
+                                    alpha=0.40,
+                                    beta=0.35,
+                                    gamma=0.25,
+                                    pixel_to_meter=0.01
+                                )
+                                st.session_state['formula_metrics'] = formula_metrics
+                            except Exception as e:
+                                st.session_state['formula_metrics'] = None
 
                             # ── Convert BGR → RGB for st.image() ──────────
                             rgb_frame = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)

@@ -92,6 +92,9 @@ poetry.lock
 .env
 .env.*
 
+# Firebase service account (sensitive credentials)
+firebase-service-account.json
+
 # IDEs and editors
 .vscode/
 .idea/
