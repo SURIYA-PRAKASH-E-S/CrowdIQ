@@ -669,11 +669,21 @@ When you're ready to deploy, update the rules in the Firebase Console:
 
 2. Edit `.env` and add your Firebase credentials:
 
+   **Option A: For Local Development (File-based)**
    ```env
    # FIREBASE REALTIME DATABASE
    FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
    GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
    ```
+
+   **Option B: For Cloud Deployment (Environment Variable)**
+   ```env
+   # FIREBASE REALTIME DATABASE
+   FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
+   FIREBASE_CREDENTIALS='{"type":"service_account","project_id":"your-project-id",...}'
+   ```
+   
+   **Note**: For Option B, set `FIREBASE_CREDENTIALS` to the entire JSON content of your service account key as a single-line string (remove newlines and escape quotes if needed). This method is recommended for cloud deployments (Docker, Kubernetes, cloud platforms).
 
 3. Replace `your-project-id` with your actual Firebase project ID from Step 4
 
@@ -784,15 +794,17 @@ Firebase Realtime Database uses a JSON tree structure. ICSS uses these collectio
 #### "Service account file not found"
 
 **Solution**: 
-- Ensure `firebase-service-account.json` exists in the project root
+- For file-based method: Ensure `firebase-service-account.json` exists in the project root
 - Check that the path in `.env` matches the actual file location
 - Use absolute path if relative path doesn't work: `C:/path/to/firebase-service-account.json`
+- Alternatively, use the `FIREBASE_CREDENTIALS` environment variable method (see Step 6 Option B)
 
 #### "Firebase is not configured" warning in app
 
 **Solution**:
 - Verify `.env` file exists and is in the project root
-- Check that `FIREBASE_DATABASE_URL` and `GOOGLE_APPLICATION_CREDENTIALS` are set
+- Check that `FIREBASE_DATABASE_URL` is set
+- Ensure either `FIREBASE_CREDENTIALS` (JSON string) or `GOOGLE_APPLICATION_CREDENTIALS` (file path) is set
 - Restart the Streamlit app after updating `.env`
 
 #### "Permission denied" errors
@@ -1173,7 +1185,8 @@ The ICSS system now provides comprehensive manual control over alert levels and 
 #### 5. Firebase Connection Errors
 
 **Solution**: 
-- Check FIREBASE_DATABASE_URL and GOOGLE_APPLICATION_CREDENTIALS in .env
+- Check FIREBASE_DATABASE_URL in .env
+- Ensure either FIREBASE_CREDENTIALS (JSON string) or GOOGLE_APPLICATION_CREDENTIALS (file path) is set
 - Verify Firebase project is active
 - Check network connectivity to Firebase
 - Review console for detailed error messages

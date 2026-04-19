@@ -4,7 +4,14 @@
 # FIREBASE REALTIME DATABASE
 # Get from: Firebase Console → Project Settings → Service Accounts
 FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
+
+# Firebase Credentials (choose one method):
+# Option A: For Local Development (File-based)
 GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
+
+# Option B: For Cloud Deployment (Environment Variable - Recommended for Docker/Kubernetes)
+# FIREBASE_CREDENTIALS='{"type":"service_account","project_id":"your-project-id",...}'
+# Note: Set FIREBASE_CREDENTIALS to the entire JSON content as a single-line string
 
 # EMAIL ALERT CONFIGURATION
 # ========================

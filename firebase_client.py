@@ -6,6 +6,7 @@ Provides a get_db() helper that returns the root database reference.
 """
 
 import os
+import json
 import logging
 import firebase_admin
 from firebase_admin import credentials, db
@@ -39,38 +40,64 @@ def _create_firebase_client():
 
     database_url = os.environ.get("FIREBASE_DATABASE_URL", "").strip()
     credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    firebase_credentials_json = os.environ.get("FIREBASE_CREDENTIALS", "").strip()
 
-    if not database_url or not credentials_path:
+    if not database_url:
         logger.warning(
-            "FIREBASE_DATABASE_URL or GOOGLE_APPLICATION_CREDENTIALS is not set. "
+            "FIREBASE_DATABASE_URL is not set. "
             "Create a .env file with your credentials or set them as environment variables. "
             "The database tab will be unavailable."
         )
         print("\n=== FIREBASE SETUP REQUIRED ===")
         print("To enable database features:")
-        print("1. Copy env_example.txt to .env")
-        print("2. Replace placeholder values with your actual Firebase credentials")
-        print("3. Download your service account JSON and place it in the project root")
-        print("4. Restart the application")
+        print("1. Set FIREBASE_DATABASE_URL environment variable")
+        print("2. Set either FIREBASE_CREDENTIALS (JSON string) or GOOGLE_APPLICATION_CREDENTIALS (file path)")
+        print("3. Restart the application")
         print("================================\n")
         return None
 
-    # Check if credentials file exists
-    if not os.path.exists(credentials_path):
+    # Try to load credentials from environment variable (better for cloud deployment)
+    if firebase_credentials_json:
+        try:
+            firebase_json = json.loads(firebase_credentials_json)
+            cred = credentials.Certificate(firebase_json)
+            logger.info("Firebase credentials loaded from FIREBASE_CREDENTIALS environment variable")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse FIREBASE_CREDENTIALS JSON: {e}")
+            print(f"\n=== INVALID FIREBASE_CREDENTIALS JSON ===")
+            print(f"Error: {e}")
+            print("================================\n")
+            return None
+    # Fallback: Load credentials from file (for local development)
+    elif credentials_path:
+        if not os.path.exists(credentials_path):
+            logger.warning(
+                f"Service account file not found at: {credentials_path}"
+            )
+            print(f"\n=== SERVICE ACCOUNT FILE NOT FOUND ===")
+            print(f"Expected file: {credentials_path}")
+            print("Download your service account JSON from Firebase Console:")
+            print("1. Go to Firebase Console → Project Settings → Service Accounts")
+            print("2. Click 'Generate New Private Key'")
+            print("3. Save the JSON file as firebase-service-account.json in the project root")
+            print("================================\n")
+            return None
+        
+        cred = credentials.Certificate(credentials_path)
+        logger.info(f"Firebase credentials loaded from file: {credentials_path}")
+    else:
         logger.warning(
-            f"Service account file not found at: {credentials_path}"
+            "Neither FIREBASE_CREDENTIALS nor GOOGLE_APPLICATION_CREDENTIALS is set. "
+            "The database tab will be unavailable."
         )
-        print(f"\n=== SERVICE ACCOUNT FILE NOT FOUND ===")
-        print(f"Expected file: {credentials_path}")
-        print("Download your service account JSON from Firebase Console:")
-        print("1. Go to Firebase Console → Project Settings → Service Accounts")
-        print("2. Click 'Generate New Private Key'")
-        print("3. Save the JSON file as firebase-service-account.json in the project root")
+        print("\n=== FIREBASE CREDENTIALS REQUIRED ===")
+        print("Set one of the following:")
+        print("1. FIREBASE_CREDENTIALS (JSON string) - Recommended for cloud deployment")
+        print("2. GOOGLE_APPLICATION_CREDENTIALS (file path) - For local development")
         print("================================\n")
         return None
 
     try:
-        cred = credentials.Certificate(credentials_path)
         firebase_admin.initialize_app(cred, {
             'databaseURL': database_url
         })
