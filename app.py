@@ -12,6 +12,8 @@ import time
 import logging
 from typing import Optional
 from streamlit.runtime.scriptrunner import add_script_run_ctx
+import plotly.graph_objects as go
+import plotly.express as px
 from utils.database import (
     insert_metric,
     insert_alert,
@@ -20,6 +22,7 @@ from utils.database import (
     fetch_recent_alerts,
     fetch_total_record_count,
     is_connected as db_is_connected,
+    get_analytics_data,
 )
 from utils.detection import (
     process_frame, process_frame_dual_models, track_movement, calculate_flow_direction, 
@@ -31,7 +34,7 @@ from utils.csrnet_density import init_density_estimator
 from utils.crowd_visualization import init_visualizer
 from utils.crowd_analytics import (
     init_crowd_analytics, draw_crowd_overlay, draw_heatmap_overlay,
-    draw_legend, create_zone_heatmap, draw_zone_grid
+    draw_legend, create_zone_heatmap, draw_zone_grid, calculate_crowd_metrics
 )
 from utils.zone_analyzer import (
     ZoneAnalyzer, calculate_crowd_bounding_area, draw_crowd_area
@@ -179,6 +182,23 @@ if "app_initialized" not in st.session_state:
             surge_window_seconds=10
         )
     
+    # Firebase sync toggle initialization
+    if 'firebase_enabled' not in st.session_state:
+        st.session_state.firebase_enabled = True
+    
+    # === ICSS UPDATE: TASK 2 - Initialize alert_history, alerts_list and alert_mode ===
+    if 'alert_history' not in st.session_state:
+        st.session_state.alert_history = []
+    if 'alerts_list' not in st.session_state:
+        st.session_state.alerts_list = []
+    if 'alert_mode' not in st.session_state:
+        st.session_state.alert_mode = 'realtime'
+    if 'last_alert_refresh' not in st.session_state:
+        st.session_state.last_alert_refresh = 0.0
+    # === ICSS UPDATE: TASK 1 - Initialize formula_metrics ===
+    if 'formula_metrics' not in st.session_state:
+        st.session_state.formula_metrics = None
+    
     # Mobile camera session state
     if 'use_mobile_camera' not in st.session_state:
         st.session_state.use_mobile_camera = False
@@ -248,13 +268,13 @@ session_manager.set_session_state(st.session_state)
 # Initialize session_manager with zone grid state
 session_manager.update_data('show_zone_grid', st.session_state.get("show_zone_grid", False))
 
-# ================= SUPABASE CONNECTION CHECK =================
-# The Supabase client is initialised lazily inside utils/database.py.
+# ================= FIREBASE CONNECTION CHECK =================
+# The Firebase client is initialised lazily inside utils/database.py.
 # We just surface a warning once at startup if the secrets are missing.
 if not db_is_connected():
     st.warning(
-        "Supabase is not configured. Create a .env file with your SUPABASE_URL "
-        "and SUPABASE_ANON_KEY, then restart the app. "
+        "Firebase is not configured. Create a .env file with your FIREBASE_DATABASE_URL "
+        "and GOOGLE_APPLICATION_CREDENTIALS, then restart the app. "
         "All other features work normally without the database."
     )
 
@@ -369,9 +389,9 @@ class VideoProcessor(VideoTransformerBase):
         # Initialize new crowd analytics
         self.crowd_analytics = init_crowd_analytics(
             low_count_threshold=5,
-            medium_count_threshold=15,
-            low_density_threshold=0.3,
-            medium_density_threshold=0.7
+            medium_count_threshold=9,
+            low_density_threshold=0.1,
+            medium_density_threshold=0.2
         )
         self.show_crowd_heatmap = True
         self.show_zone_grid = False
@@ -460,9 +480,9 @@ class VideoProcessor(VideoTransformerBase):
                     density, 
                     people_count,
                     low_count_threshold=5,
-                    medium_count_threshold=15,
-                    low_density_threshold=0.3,
-                    medium_density_threshold=0.7
+                    medium_count_threshold=9,
+                    low_density_threshold=0.1,
+                    medium_density_threshold=0.2
                 )
                 
                 # Update tracking result with correct risk level
@@ -540,13 +560,15 @@ class VideoProcessor(VideoTransformerBase):
                 # Enhanced alert workflow based on camera source and manual settings
                 camera_source = getattr(st.session_state, 'camera_source', 'webcam')
                 manual_settings_active = getattr(st.session_state, 'apply_manual_settings', False)
+                # === ICSS UPDATE: TASK 2 - Get alert_mode for demo/realtime handling ===
+                alert_mode = getattr(st.session_state, 'alert_mode', 'realtime')
                 
-                # Persist new zone alerts to Supabase with enhanced features (throttled)
+                # Persist new zone alerts to Firebase with enhanced features (throttled)
                 if zone_alerts:
                     prev_count = getattr(self, '_last_saved_alert_count', 0)
                     if len(zone_alerts) > prev_count:
                         # Import enhanced alert utilities
-                        from utils.alert_store import insert_enhanced_alert
+                        from utils.alert_store import get_alert_store
                         
                         for i, alert_msg in enumerate(zone_alerts[prev_count:]):
                             # Extract zone information if available
@@ -576,17 +598,26 @@ class VideoProcessor(VideoTransformerBase):
                                 alert_severity = "HIGH" if zone_info and zone_info.get('people_count', 0) > 20 else "MEDIUM"
                                 alert_type = "Zone Overcrowded"
                             
-                            # Insert enhanced alert with snapshot and camera source info
-                            insert_enhanced_alert(
-                                alert_type=alert_type,
-                                severity=alert_severity,
-                                zone=zone_info.get('zone_id') if zone_info else None,
-                                count=zone_info.get('people_count', people_count) if zone_info else people_count,
-                                density=zone_info.get('density', density) if zone_info else density,
-                                message=alert_text,
-                                frame=current_frame,
-                                camera_source=camera_source  # Add camera source metadata
-                            )
+                            # === ICSS UPDATE: TASK 2 - Use alert_store.add_alert() for session_state + Firebase ===
+                            # In demo mode, add [Demo] prefix and skip email
+                            if alert_mode == 'demo':
+                                alert_text = f"[Demo] {alert_text}"
+                            
+                            # Build alert dict for add_alert (stores to session_state + Firebase)
+                            alert_dict = {
+                                "type": alert_type,
+                                "severity": alert_severity,
+                                "zone": zone_info.get('zone_id') if zone_info else None,
+                                "count": zone_info.get('people_count', people_count) if zone_info else people_count,
+                                "density": zone_info.get('density', density) if zone_info else density,
+                                "message": alert_text,
+                                "image_url": None,  # Will be set if Cloudinary upload succeeds
+                                "email_sent": False
+                            }
+                            
+                            # Store in alert_store (session_state + Firebase)
+                            alert_store = get_alert_store()
+                            alert_store.add_alert(alert_dict)
                         
                         self._last_saved_alert_count = len(zone_alerts)
                 else:
@@ -631,9 +662,9 @@ class VideoProcessor(VideoTransformerBase):
                     density, 
                     people_count,
                     low_count_threshold=5,
-                    medium_count_threshold=15,
-                    low_density_threshold=0.3,
-                    medium_density_threshold=0.7
+                    medium_count_threshold=9,
+                    low_density_threshold=0.1,
+                    medium_density_threshold=0.2
                 )
                 
                 # Add minimal overlays for performance
@@ -675,13 +706,33 @@ class VideoProcessor(VideoTransformerBase):
                     'alerts': []
                 }
             
+            # === ICSS UPDATE: TASK 1 - Calculate formula-based metrics ===
+            # Calculate formula metrics using density and tracked objects
+            try:
+                tracked_objects = frame_data.get('tracked_objects', [])
+                formula_metrics = calculate_crowd_metrics(
+                    density=density,
+                    tracks=tracked_objects,
+                    frame_area=None,  # Will use default scaling
+                    d_critical=1.5,
+                    alpha=0.40,
+                    beta=0.35,
+                    gamma=0.25,
+                    pixel_to_meter=0.01
+                )
+                # Store in session state for Analytics tab display
+                session_manager.update_data('formula_metrics', formula_metrics)
+            except Exception as e:
+                # If calculation fails, store None
+                session_manager.update_data('formula_metrics', None)
+            
             # Update session state with frame data (thread-safe update will be handled by main thread)
             try:
                 session_manager.update_data('current_frame_data', frame_data)
             except:
                 pass  # Ignore session state errors in async thread
 
-            # Persist to Supabase every 30 frames (~1 s at 30 fps) to avoid flooding the DB
+            # Persist to Firebase every 30 frames (~1 s at 30 fps) to avoid flooding the DB
             if self.frame_count % 30 == 0:
                 insert_metric(
                     people_count  = frame_data.get('people_count', 0),
@@ -692,6 +743,58 @@ class VideoProcessor(VideoTransformerBase):
                     peak_count    = frame_data.get('peak_count', 0),
                     average_count = frame_data.get('average_count', 0.0),
                 )
+
+            # === ICSS UPDATE: TASK 2 - Call process_alert for real-time alerts ===
+            # Determine severity based on risk level
+            risk_lvl = frame_data.get('risk_level', 'Normal')
+            people_count = frame_data.get('people_count', 0)
+            density = frame_data.get('density', 0.0)
+            
+            print(f"[WEBCAM DEBUG] risk_level={risk_lvl}, count={people_count}, density={density:.3f}")
+            
+            if risk_lvl == 'HIGH':
+                severity = 'HIGH'
+            elif risk_lvl == 'CRITICAL':
+                severity = 'CRITICAL'
+            elif risk_lvl == 'MEDIUM':
+                severity = 'MEDIUM'
+            elif risk_lvl == 'LOW':
+                severity = 'LOW'
+            else:
+                severity = 'LOW'
+
+            # Build alert data
+            alert_data = {
+                "timestamp": time.time(),
+                "type": "crowd",
+                "severity": severity,
+                "count": people_count,
+                "density": density,
+                "message": f"[Webcam] {risk_lvl} Risk - {people_count} people, density {density:.3f} p/m²"
+            }
+
+            # Capture and upload snapshot for HIGH/CRITICAL alerts
+            image_url = None
+            if severity in ["HIGH", "CRITICAL"]:
+                try:
+                    from utils.cloudinary_helper import upload_snapshot
+                    # Upload the annotated frame (with detection boxes)
+                    success, url = upload_snapshot(annotated_img)
+                    if success:
+                        image_url = url
+                        alert_data["image_url"] = url
+                        print(f"[WEBCAM DEBUG] Snapshot uploaded: {url}")
+                except Exception as e:
+                    print(f"[WEBCAM DEBUG] Failed to upload snapshot: {e}")
+            
+            print(f"[WEBCAM DEBUG] alert_data severity={severity}")
+
+            # Call process_alert (handles cooldown, mode, Firebase, email, UI)
+            try:
+                from utils.alert_manager import process_alert
+                process_alert(alert_data)
+            except Exception as e:
+                pass  # Don't break the video loop for alert errors
 
             # Return processed frame as a new VideoFrame
             return VideoFrame.from_ndarray(annotated_img, format="bgr24")
@@ -819,7 +922,7 @@ def process_uploaded_video(video_file):
                     video_placeholder.image(annotated_frame, channels="BGR", width=safe_width(640))
                     processed_frames += 1
 
-                    # Persist to Supabase every 30 processed frames
+                    # Persist to Firebase every 30 processed frames
                     if processed_frames % 30 == 0:
                         insert_metric(
                             people_count  = tracking_result.get('people_count', 0),
@@ -866,8 +969,18 @@ def process_uploaded_video(video_file):
     # Show processing summary
     st.success(f"Video processing completed! Processed {processed_frames} frames out of {total_frames}")
 
-
 # ================= MAIN UI WITH TABS =================
+# FIXED: Bug 3 Step D - Drain alert queue in main thread before tabs
+from utils.alert_store import drain_alert_queue
+new_alerts = drain_alert_queue()
+if new_alerts:
+    if "alert_history" not in st.session_state:
+        st.session_state["alert_history"] = []
+    st.session_state["alert_history"].extend(new_alerts)
+    # Cap at 100
+    st.session_state["alert_history"] = st.session_state["alert_history"][-100:]
+    st.session_state["last_alert_refresh"] = time.time()
+
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🎥 Live Feed", "📊 Analytics", "🗺️ Map Area", "📂 Cloud DB", "⚙️ Controls", "🚨 Alerts"])
 
 with tab1:
@@ -910,7 +1023,7 @@ with tab1:
             - No tunnel or local network required
             - Camera runs entirely in your browser
             - Same detection capabilities as webcam mode
-            - Works on Replit without any extra setup
+            - Works without any extra setup
             """)
             else:
                 st.info("📱 Using mobile camera via public tunnel URL")
@@ -982,6 +1095,29 @@ with tab1:
     with col2:
         st.markdown("### 🎥 Live Feed")
         
+        # === LIVE ALERT DISPLAY ===
+        # Check for new alerts and display them
+        alerts_list = st.session_state.get("alerts_list", [])
+        if alerts_list:
+            latest_alert = alerts_list[0]
+            alert_severity = latest_alert.get("severity", "LOW")
+            alert_message = latest_alert.get("message", "")
+            
+            # Display alert banner
+            if alert_severity in ["HIGH", "CRITICAL"]:
+                st.error(f"🚨 {alert_severity} ALERT: {alert_message}")
+                # Play beep sound for HIGH/CRITICAL alerts
+                if "last_alert_sound_time" not in st.session_state:
+                    st.session_state.last_alert_sound_time = 0
+                current_time = time.time()
+                if current_time - st.session_state.last_alert_sound_time > 10:  # Play sound every 10 seconds
+                    play_alert_sound()
+                    st.session_state.last_alert_sound_time = current_time
+            elif alert_severity == "MEDIUM":
+                st.warning(f"⚠️ MEDIUM ALERT: {alert_message}")
+            elif alert_severity == "LOW":
+                st.info(f"ℹ️ LOW ALERT: {alert_message}")
+        
         if st.session_state.input_mode == "Webcam (Live)":
             # Set camera source for alert workflow
             st.session_state.camera_source = "webcam"
@@ -1031,8 +1167,8 @@ with tab1:
                         "📱 Mobile camera not connected.\n\n"
                         "Go to the **sidebar → Mobile Camera** section, enter your "
                         "ngrok / Cloudflare Tunnel URL, then click **▶ Connect**.\n\n"
-                        "Local IPs (192.168.x.x) are not reachable from Replit — "
-                        "a public tunnel URL is required."
+                        "Local IPs (192.168.x.x) may not be accessible - "
+                        "a public tunnel URL is recommended."
                     )
                 else:
                     st.success(
@@ -1091,12 +1227,17 @@ with tab1:
 
                             # ── Alert checks ─────────────────────────────
                             if alert_manager_local:
+                                # === ICSS UPDATE: TASK 2 - Wire alert_mode and camera_source ===
+                                alert_mode = st.session_state.get('alert_mode', 'realtime')
+                                camera_source = 'mobile'
                                 new_alerts = alert_manager_local.process_all(
                                     risk_level=result['risk_level'],
                                     count=result['people_count'],
                                     density=result['density'],
                                     zones=zone_summary,
-                                    mobile_camera=True  # Mobile camera specific processing
+                                    mobile_camera=True,  # Legacy parameter
+                                    alert_mode=alert_mode,
+                                    camera_source=camera_source
                                 )
                                 if new_alerts:
                                     critical = [
@@ -1106,15 +1247,52 @@ with tab1:
                                     if critical:
                                         play_alert_sound()
 
-                                active_alerts = alert_manager_local.get_active_alerts()
-                                annotated = draw_alert_overlay(annotated, active_alerts)
+                            # === ICSS UPDATE: TASK 2 - Call process_alert for real-time alerts ===
+                            risk_lvl = result.get('risk_level', 'Normal')
+                            if risk_lvl == 'HIGH':
+                                severity = 'HIGH'
+                            elif risk_lvl == 'CRITICAL':
+                                severity = 'CRITICAL'
+                            elif risk_lvl == 'MEDIUM':
+                                severity = 'MEDIUM'
+                            elif risk_lvl == 'LOW':
+                                severity = 'LOW'
+                            else:
+                                severity = 'LOW'
+
+                            alert_data = {
+                                "timestamp": time.time(),
+                                "type": "crowd",
+                                "severity": severity,
+                                "count": result.get('people_count', 0),
+                                "density": result.get('density', 0.0),
+                                "message": f"[Mobile] {risk_lvl} Risk - {result.get('people_count', 0)} people, density {result.get('density', 0.0):.3f} p/m²"
+                            }
+
+                            # Capture and upload snapshot for HIGH/CRITICAL alerts
+                            if severity in ["HIGH", "CRITICAL"]:
+                                try:
+                                    from utils.cloudinary_helper import upload_snapshot
+                                    # Upload the annotated frame (with detection boxes)
+                                    success, url = upload_snapshot(annotated)
+                                    if success:
+                                        alert_data["image_url"] = url
+                                        print(f"[MOBILE DEBUG] Snapshot uploaded: {url}")
+                                except Exception as e:
+                                    print(f"[MOBILE DEBUG] Failed to upload snapshot: {e}")
+
+                            try:
+                                from utils.alert_manager import process_alert
+                                process_alert(alert_data)
+                            except Exception:
+                                pass
 
                             # ── Convert BGR → RGB for st.image() ──────────
                             rgb_frame = cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB)
                             frame_placeholder.image(
                                 rgb_frame,
                                 channels="RGB",
-                                use_container_width=True,
+                                width='stretch',
                                 caption=(
                                     f"📱 Mobile Feed | "
                                     f"👥 {result['people_count']} people | "
@@ -1123,7 +1301,7 @@ with tab1:
                             )
 
                             with metrics_placeholder.container():
-                                col1, col2, col3, col4 = st.columns(4)
+                                col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
                                 col1.metric("👥 People", result['people_count'])
                                 col2.metric("📊 Density", f"{result['density']:.4f}")
                                 col3.metric("⚡ Risk", result['risk_level'])
@@ -1461,22 +1639,150 @@ with tab2:
                 st.warning("⚡ Moderate crowd density. Monitor situation closely.")
             else:
                 st.success("✅ Normal crowd density. No immediate action required.")
-    
-    else:
-        st.info("📊 No data available. Start video feed to see analytics.")
         
-        # Placeholder metrics
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # === ICSS UPDATE: TASK 1 - Formula-Based Metrics Display ===
+        st.markdown("---")
+        with st.expander("📐 Formula-Based Metrics", expanded=False):
+            formula_metrics = st.session_state.get("formula_metrics")
+            
+            if formula_metrics is None:
+                st.info("Processing formula metrics...")
+            else:
+                # Display formula metrics in 3-column layout
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Flow Rate Q",
+                        f"{formula_metrics['flow_rate']:.4f}",
+                        help="Formula: Q = D × V (people per second per meter)"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "Congestion Index C",
+                        f"{formula_metrics['congestion_index']:.4f}",
+                        help="Formula: C = D / D_critical (D_critical = 1.5 p/m²)"
+                    )
+                
+                with col3:
+                    st.metric(
+                        "Formula Risk Score R",
+                        f"{formula_metrics['risk_score']:.4f}",
+                        help="Formula: R = αD + βQ + γC (α=0.40, β=0.35, γ=0.25)"
+                    )
+                
+                st.markdown("---")
+                
+                # Display additional formula metrics
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        "Velocity V",
+                        f"{formula_metrics['velocity']:.4f} m/s",
+                        help="Average crowd velocity from Deep SORT tracking"
+                    )
+                
+                with col2:
+                    # is_dangerous badge
+                    if formula_metrics['is_dangerous']:
+                        st.markdown("🔴 **DANGEROUS** - Congestion index > 1.0")
+                    else:
+                        st.markdown("🟢 **SAFE** - Congestion index ≤ 1.0")
+                
+                with col3:
+                    st.metric(
+                        "Formula Risk Level",
+                        formula_metrics['formula_risk_level'],
+                        help="Based on composite risk score R"
+                    )
+    
+    # Trend Visualization Charts
+    st.markdown("---")
+    st.subheader("📈 Historical Trend Analysis")
+    
+    # Get analytics data
+    analytics_df = get_analytics_data(limit=100)
+    
+    if not analytics_df.empty:
+        # Chart 1: People Count Trend (Line Chart)
+        st.markdown("#### 👥 People Count Trend")
+        fig_count = go.Figure()
+        fig_count.add_trace(go.Scatter(
+            x=analytics_df['timestamp'],
+            y=analytics_df['people_count'],
+            mode='lines+markers',
+            name='People Count',
+            line=dict(color='#3498db', width=2),
+            marker=dict(size=6)
+        ))
+        fig_count.update_layout(
+            title='People Count Over Time',
+            xaxis_title='Timestamp',
+            yaxis_title='People Count',
+            hovermode='x unified',
+            height=300
+        )
+        st.plotly_chart(fig_count, width='stretch')
+        
+        # Chart 2: Density Trend (Line Chart)
+        st.markdown("#### 📈 Density Trend")
+        fig_density = go.Figure()
+        fig_density.add_trace(go.Scatter(
+            x=analytics_df['timestamp'],
+            y=analytics_df['density'],
+            mode='lines+markers',
+            name='Density',
+            line=dict(color='#e74c3c', width=2),
+            marker=dict(size=6)
+        ))
+        fig_density.update_layout(
+            title='Density Over Time',
+            xaxis_title='Timestamp',
+            yaxis_title='Density (p/m²)',
+            hovermode='x unified',
+            height=300
+        )
+        st.plotly_chart(fig_density, width='stretch')
+        
+        # Charts 3 & 4: Side by side - Risk Distribution and Flow Direction
+        col1, col2 = st.columns(2)
+        
         with col1:
-            st.metric("👥 People Count", "--")
+            # Chart 3: Risk Level Distribution (Pie Chart)
+            st.markdown("#### ⚠️ Risk Level Distribution")
+            risk_counts = analytics_df['risk_level'].value_counts()
+            fig_risk = go.Figure(data=[go.Pie(
+                labels=risk_counts.index,
+                values=risk_counts.values,
+                hole=0.4,
+                marker=dict(colors=['#2ecc71', '#f39c12', '#e74c3c'])
+            )])
+            fig_risk.update_layout(
+                title='Risk Level Distribution',
+                height=350
+            )
+            st.plotly_chart(fig_risk, width='stretch')
+        
         with col2:
-            st.metric("📈 Density", "--")
-        with col3:
-            st.metric("🧭 Flow Direction", "--")
-        with col4:
-            st.metric("⚠️ Risk Level", "--")
-        with col5:
-            st.metric("⚡ Avg Speed", "--")
+            # Chart 4: Flow Direction Distribution (Bar Chart)
+            st.markdown("#### 🧭 Flow Direction Distribution")
+            flow_counts = analytics_df['flow_direction'].value_counts()
+            fig_flow = go.Figure(data=[go.Bar(
+                x=flow_counts.index,
+                y=flow_counts.values,
+                marker=dict(color=['#3498db', '#9b59b6', '#1abc9c', '#e67e22', '#95a5a6', '#bdc3c7'])
+            )])
+            fig_flow.update_layout(
+                title='Flow Direction Distribution',
+                xaxis_title='Flow Direction',
+                yaxis_title='Count',
+                height=350
+            )
+            st.plotly_chart(fig_flow, width='stretch')
+    else:
+        st.info("📊 No historical data available. Start video feed to collect analytics data for trend visualization.")
 
     with tab3:
         # ================= DUCKDB ANALYTICS DASHBOARD =================
@@ -1587,13 +1893,13 @@ with tab2:
             session_manager.update_data('show_crowd_area', show_crowd_area)
     
     with tab4:
-        # ================= SUPABASE ANALYTICS DASHBOARD =================
+        # ================= FIREBASE ANALYTICS DASHBOARD =================
         st.subheader("☁️ Cloud Database Analytics")
 
         if not db_is_connected():
             st.error(
-                "❌ Supabase is not connected.\n\n"
-                "Add SUPABASE_URL and SUPABASE_ANON_KEY in Replit → Secrets, "
+                "❌ Firebase is not connected.\n\n"
+                "Add FIREBASE_DATABASE_URL and GOOGLE_APPLICATION_CREDENTIALS to your .env file, "
                 "then restart the app."
             )
         else:
@@ -1627,7 +1933,7 @@ with tab2:
             historical_data = fetch_recent_metrics(limit=10)
 
             if not historical_data.empty:
-                st.dataframe(historical_data, use_container_width=True)
+                st.dataframe(historical_data, width='stretch')
 
                 df_chron = historical_data.iloc[::-1]  # chronological order
                 avg_count   = df_chron['people_count'].mean()
@@ -1651,7 +1957,7 @@ with tab2:
             st.subheader("💾 Database Information")
             total_records = fetch_total_record_count()
             st.info(f"📊 Total Records: {total_records}")
-            st.info("☁️ Database: Supabase (PostgreSQL)")
+            st.info("☁️ Database: Firebase Realtime Database")
 
 with tab5:
         st.subheader("⚙️ System Controls")
@@ -1994,6 +2300,27 @@ with tab5:
                     st.json(st.session_state.current_frame_data)
                 else:
                     st.warning("No data to export")
+        
+        # Firebase Sync Toggle
+        st.markdown("---")
+        st.markdown("### 🔥 Firebase Database Sync")
+        
+        firebase_sync = st.toggle(
+            "Enable Firebase Sync",
+            value=st.session_state.get("firebase_enabled", True),
+            key="ctrl_firebase_sync",
+            help="Toggle Firebase Realtime Database synchronization. When disabled, data is stored locally only."
+        )
+        st.session_state.firebase_enabled = firebase_sync
+        session_manager.update_data('firebase_enabled', firebase_sync)
+        
+        if firebase_sync:
+            if db_is_connected():
+                st.success("✅ Firebase Sync ENABLED - Data will be synced to cloud database")
+            else:
+                st.warning("⚠️ Firebase Sync enabled but not connected - Data will be stored locally")
+        else:
+            st.info("🔴 Firebase Sync DISABLED - Data will be stored locally only")
         
         st.markdown("---")
         st.markdown("### 📋 System Information")

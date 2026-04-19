@@ -7,6 +7,9 @@ import numpy as np
 from collections import deque
 from typing import Dict, Tuple, List, Optional
 
+# === ICSS UPDATE: TASK 1 - Import formula-based crowd metrics ===
+from utils.crowd_analytics import calculate_crowd_metrics
+
 class SmartRiskEngine:
     """
     Advanced risk assessment engine with dynamic weighted scoring
@@ -226,7 +229,9 @@ class SmartRiskEngine:
     def compute_comprehensive_risk(self, 
                                  density: float, 
                                  flow_conflict: float, 
-                                 speed_variation: float) -> Dict:
+                                 speed_variation: float,
+                                 tracks: list = None,
+                                 frame_area: float = None) -> Dict:
         """
         Compute comprehensive risk assessment with all outputs.
         
@@ -234,9 +239,11 @@ class SmartRiskEngine:
             density: Crowd density
             flow_conflict: Flow conflict score
             speed_variation: Speed variation score
+            tracks: Optional list of Deep SORT tracks for formula metrics
+            frame_area: Optional frame area in m² for formula metrics
             
         Returns:
-            Dictionary with risk assessment results
+            Dictionary with risk assessment results including formula_metrics
         """
         # Compute raw risk score
         raw_risk_score = self.compute_risk_score(density, flow_conflict, speed_variation)
@@ -260,6 +267,19 @@ class SmartRiskEngine:
         density_norm, flow_conflict_norm, speed_variation_norm = \
             self.normalize_inputs(density, flow_conflict, speed_variation)
         
+        # === ICSS UPDATE: TASK 1 - Calculate formula-based metrics ===
+        # Use existing weights as alpha, beta, gamma for formula
+        formula_metrics = calculate_crowd_metrics(
+            density=density,
+            tracks=tracks,
+            frame_area=frame_area,
+            d_critical=1.5,
+            alpha=self.w_density,
+            beta=self.w_flow_conflict,
+            gamma=self.w_speed_variation,
+            pixel_to_meter=0.01
+        )
+        
         return {
             'risk_score': smoothed_risk_score,
             'risk_level': risk_level,
@@ -274,7 +294,8 @@ class SmartRiskEngine:
                 'density': density,
                 'flow_conflict': flow_conflict,
                 'speed_variation': speed_variation
-            }
+            },
+            'formula_metrics': formula_metrics
         }
     
     def update_weights(self, 

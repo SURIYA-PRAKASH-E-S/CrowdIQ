@@ -3,7 +3,7 @@ camera1.py — Mobile Camera Handler for AI Crowd Surveillance System
 
 SETUP INSTRUCTIONS FOR USER:
 ─────────────────────────────────────────────────────────────
-Replit runs in the cloud — it cannot reach local network IPs (192.168.x.x).
+The app runs in the cloud — it may not reach local network IPs (192.168.x.x).
 You must expose your camera via a public tunnel URL.
 
 Option A — Public URL (ngrok / Cloudflare Tunnel):
@@ -13,7 +13,7 @@ Option A — Public URL (ngrok / Cloudflare Tunnel):
   4. Copy the https://xxxx.ngrok.io URL and paste it in the sidebar with /video appended.
 
 Option B — Browser WebRTC (no tunnel needed):
-  Uses your browser's built-in camera access — works on Replit without any setup.
+  Uses your browser's built-in camera access — works without any tunnel setup.
 ─────────────────────────────────────────────────────────────
 """
 
@@ -31,7 +31,7 @@ def _validate_stream_url(url: str, timeout: int = 5) -> tuple[bool, str]:
     """
     Validate stream URL before opening VideoCapture.
     Blocks private/LAN IPs with a helpful error before even attempting a
-    connection — they are unreachable from the Replit cloud.
+    connection — they may be unreachable from the cloud.
     Returns (is_valid: bool, message: str).
     """
     if not url:
@@ -39,7 +39,7 @@ def _validate_stream_url(url: str, timeout: int = 5) -> tuple[bool, str]:
 
     url = url.strip()
 
-    # Block private LAN IPs — unreachable from Replit cloud
+    # Block private LAN IPs — may be unreachable from cloud
     private_prefixes = (
         "http://192.168.", "http://10.", "http://172.16.",
         "http://172.17.", "http://172.18.", "http://172.19.",
@@ -52,8 +52,8 @@ def _validate_stream_url(url: str, timeout: int = 5) -> tuple[bool, str]:
     for prefix in private_prefixes:
         if url.startswith(prefix):
             return False, (
-                "LOCAL IP DETECTED — Cannot connect from Replit.\n\n"
-                "Replit runs in the cloud and cannot reach your home network.\n\n"
+                "LOCAL IP DETECTED — Cannot connect from cloud.\n\n"
+                "The app runs in the cloud and may not reach your local network.\n\n"
                 "TO FIX:\n"
                 "1. Keep IP Webcam running on your phone (port 8080)\n"
                 "2. Download ngrok: https://ngrok.com/download\n"
@@ -138,7 +138,7 @@ def test_stream_url(url: str, timeout: int = 5) -> tuple[bool, str]:
         reason = str(e.reason)
         if "192.168" in url or "10." in url or "172." in url:
             hint = (
-                "Local/private IP addresses are blocked on Replit. "
+                "Local/private IP addresses may not be accessible. "
                 "Use a public tunnel URL (ngrok / Cloudflare Tunnel). "
                 "See the setup instructions in the sidebar."
             )
@@ -154,7 +154,7 @@ def test_stream_url(url: str, timeout: int = 5) -> tuple[bool, str]:
 class MobileCameraStream:
     """
     Handles mobile camera streaming via a public HTTP/HTTPS URL (e.g. ngrok tunnel).
-    Accepts any full URL — not just local IPs — making it compatible with Replit.
+    Accepts any full URL — not just local IPs — for remote camera access.
     """
 
     def __init__(self, stream_url: str):
@@ -336,7 +336,7 @@ def render_mobile_camera_sidebar(session_state) -> MobileCameraStream | None:
         "Connection mode",
         ["Public URL (ngrok / Tunnel)", "Browser WebRTC (no tunnel)"],
         key="mobile_camera_mode",
-        help="Replit cannot reach local IPs (192.168.x.x). Use a tunnel or WebRTC.",
+        help="Local network IPs may not be accessible. Use a tunnel or WebRTC for remote access.",
     )
     session_state["camera_mode"] = camera_mode
 
@@ -360,7 +360,7 @@ Copy the `https://xxxx.ngrok.io` URL shown.
 Append `/video` to the ngrok URL, e.g.:
 `https://abc123.ngrok.io/video`
 
-> ⚠️ Local IPs (192.168.x.x) are **blocked** on Replit — the tunnel is required.
+> ⚠️ Local IPs (192.168.x.x) may not be accessible — a tunnel is recommended.
             """)
 
         stream_url = st.sidebar.text_input(
@@ -368,7 +368,7 @@ Append `/video` to the ngrok URL, e.g.:
             value=session_state.get("ip_webcam_url", ""),
             placeholder="https://xxxx.ngrok.io/video",
             help=(
-                "On Replit, use a public ngrok URL — local IPs (192.168.x.x) won't work. "
+                "Use a public URL (ngrok/cloudflare) for remote access. "
                 "Run: ngrok http 8080  →  copy the https URL  →  add /video at the end."
             ),
             key="ip_webcam_url",
@@ -411,7 +411,7 @@ Append `/video` to the ngrok URL, e.g.:
                         st.sidebar.error(msg)
                         st.sidebar.info(
                             "💡 Use a public tunnel URL. "
-                            "Local IPs are not reachable from Replit."
+                            "Local IPs may not be accessible from the cloud."
                         )
                     else:
                         if "mobile_stream" in session_state:

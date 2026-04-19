@@ -1,10 +1,10 @@
 # ENVIRONMENT VARIABLES FOR ICSS
 # ===============================
 
-# SUPABASE DATABASE
-# Get from: https://supabase.com/dashboard/project/your-project-id/settings/api
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_ANON_KEY=your-supabase-anon-key-here
+# FIREBASE REALTIME DATABASE
+# Get from: Firebase Console → Project Settings → Service Accounts
+FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
+GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
 
 # EMAIL ALERT CONFIGURATION
 # ========================
@@ -19,7 +19,4 @@ EMAIL_TO=recipient@gmail.com
 # ======================
 SMS_PHONE_NUMBER=1234567890
 SMS_CARRIER=AT&T
-# Optional: Twilio configuration (if using Twilio instead of email-to-SMS gateway)
-TWILIO_ACCOUNT_SID=your-twilio-sid
-TWILIO_AUTH_TOKEN=your-twilio-token
-TWILIO_FROM_NUMBER=+1234567890
+
