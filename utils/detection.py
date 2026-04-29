@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from typing import List, Tuple, Dict, Any
 from .tracker import ObjectTracker
+from .physics_flow import PhysicsFlowAnalyzer, format_flow_metrics_text, draw_flow_arrow
 
 prev_positions = {}
 centroid_history = []  # Store movement vectors for flow analysis
@@ -44,22 +45,23 @@ def process_frame(frame, model) -> Dict[str, Any]:
                 # Draw bounding box
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 
-                # Direction detection (existing logic)
-                if i in prev_positions:
-                    px, py = prev_positions[i]
-                    
-                    if cx > px:
-                        direction = "Right"
-                    elif cx < px:
-                        direction = "Left"
-                    elif cy > py:
-                        direction = "Down"
-                    else:
-                        direction = "Up"
-                    
-                    cv2.putText(frame, direction, (cx, cy),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                (0, 0, 255), 2)
+                # DEPRECATED: Old direction detection logic
+                # Replaced by physics-based flow analysis
+                # if i in prev_positions:
+                #     px, py = prev_positions[i]
+                #     
+                #     if cx > px:
+                #         direction = "Right"
+                #     elif cx < px:
+                #         direction = "Left"
+                #     elif cy > py:
+                #         direction = "Down"
+                #     else:
+                #         direction = "Up"
+                #     
+                #     cv2.putText(frame, direction, (cx, cy),
+                #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                #                 (0, 0, 255), 2)
     
     prev_positions = current_positions
     
@@ -141,22 +143,23 @@ def process_frame_dual_models(frame, model_v11, model_v8, active_models=["v11", 
         cv2.putText(frame, label, (x1, y1-10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
         
-        # Direction detection (existing logic)
-        if (people_count-1) in prev_positions:
-            px, py = prev_positions[people_count-1]
-            
-            if cx > px:
-                direction = "Right"
-            elif cx < px:
-                direction = "Left"
-            elif cy > py:
-                direction = "Down"
-            else:
-                direction = "Up"
-            
-            cv2.putText(frame, direction, (cx, cy),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                        (0, 0, 255), 2)
+        # DEPRECATED: Old direction detection logic
+        # Replaced by physics-based flow analysis
+        # if (people_count-1) in prev_positions:
+        #     px, py = prev_positions[people_count-1]
+        #     
+        #     if cx > px:
+        #         direction = "Right"
+        #     elif cx < px:
+        #         direction = "Left"
+        #     elif cy > py:
+        #         direction = "Down"
+        #     else:
+        #         direction = "Up"
+        #     
+        #     cv2.putText(frame, direction, (cx, cy),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+        #                 (0, 0, 255), 2)
     
     prev_positions = current_positions
     
@@ -255,10 +258,14 @@ def track_movement(current_centroids: List[Tuple[int, int]],
     return movement_vectors
 
 # ================= FLOW DIRECTION INTELLIGENCE =================
+# DEPRECATED: Old majority voting direction calculation
+# Kept for backward compatibility but disabled in favor of physics-based flow analysis
 def calculate_flow_direction(movement_vectors: List[Tuple[int, int]]) -> str:
     """
     Calculate overall crowd flow direction using majority voting
     Returns: 'Left', 'Right', 'Up', 'Down', or 'Mixed'
+    
+    DEPRECATED: Use physics-based flow analysis instead
     """
     if not movement_vectors:
         return "Unknown"
@@ -291,6 +298,70 @@ def calculate_flow_direction(movement_vectors: List[Tuple[int, int]]) -> str:
         return most_common
     else:
         return "Mixed"
+
+
+# ================= PHYSICS-BASED FLOW ANALYSIS =================
+def compute_physics_flow_metrics(tracked_objects: List[Dict],
+                                 density: float,
+                                 pixel_to_meter: float = 0.01,
+                                 fps: float = 30.0,
+                                 physics_analyzer: PhysicsFlowAnalyzer = None,
+                                 zone_id: str = "global") -> Dict[str, Any]:
+    """
+    Compute physics-based flow metrics using fluid dynamics principles.
+    
+    Args:
+        tracked_objects: List of tracked objects with bbox and track_id
+        density: Density in people/m²
+        pixel_to_meter: Conversion factor from pixels to meters
+        fps: Frame rate for speed calculation
+        physics_analyzer: PhysicsFlowAnalyzer instance (creates new if None)
+        zone_id: Zone identifier for metrics storage
+        
+    Returns:
+        Dictionary with physics flow metrics:
+        - density: D (people/m²)
+        - avg_speed: V (m/s)
+        - flow_rate: Q = D × V (people/(m·s))
+        - congestion_index: C = D / D_critical
+        - congestion_level: "Free", "Moderate", "Dangerous"
+        - avg_vector: (dx, dy) average flow vector
+    """
+    # Create analyzer if not provided
+    if physics_analyzer is None:
+        physics_analyzer = PhysicsFlowAnalyzer(
+            pixel_to_meter=pixel_to_meter,
+            fps=fps
+        )
+    
+    # Update analyzer parameters
+    physics_analyzer.update_pixel_to_meter(pixel_to_meter)
+    physics_analyzer.update_fps(fps)
+    
+    # Compute flow metrics
+    metrics = physics_analyzer.compute_flow_metrics(
+        tracked_objects=tracked_objects,
+        density=density,
+        zone_id=zone_id
+    )
+    
+    # Return as dictionary - handle both object and dict returns
+    if isinstance(metrics, dict):
+        # Already a dict, return it directly
+        result = metrics.copy()
+        result['physics_analyzer'] = physics_analyzer
+        return result
+    else:
+        # Object with attributes
+        return {
+            'density': metrics.density,
+            'avg_speed': metrics.avg_speed,
+            'flow_rate': metrics.flow_rate,
+            'congestion_index': metrics.congestion_index,
+            'congestion_level': metrics.congestion_level,
+            'avg_vector': metrics.avg_vector,
+            'physics_analyzer': physics_analyzer  # Return for state persistence
+        }
 
 # ================= IMPROVED DENSITY CALCULATION =================
 def calculate_density(people_count: int, frame_width: int, frame_height: int) -> float:
@@ -446,7 +517,8 @@ def process_frame_with_deep_sort(frame, model_v11, model_v8, tracker: ObjectTrac
                 'risk_color': (0, 255, 0),
                 'model_info': model_info,
                 'avg_speed': 0.0,
-                'tracked_objects': []
+                'tracked_objects': [],
+                'physics_flow_metrics': None  # Add physics flow metrics
             }
         
         # Update Deep SORT tracker with error handling
@@ -482,7 +554,8 @@ def process_frame_with_deep_sort(frame, model_v11, model_v8, tracker: ObjectTrac
                 'risk_color': (0, 255, 0),
                 'model_info': model_info,
                 'avg_speed': 0.0,
-                'tracked_objects': []
+                'tracked_objects': [],
+                'physics_flow_metrics': None  # Add physics flow metrics
             }
         
         # Draw tracking information on frame with error handling
@@ -510,16 +583,42 @@ def process_frame_with_deep_sort(frame, model_v11, model_v8, tracker: ObjectTrac
         people_count = tracking_results['total_count']
         density = calculate_density(people_count, w, h)
         
+        # Calculate pixel-to-meter conversion (assuming 50m x 30m real-world area)
+        pixel_to_meter = 0.01  # Default: 1 pixel = 0.01 meters (adjust based on camera calibration)
+        
         # Extract tracked objects data for analytics
         tracked_objects = tracking_results.get('tracked_objects', [])
         
-        # Calculate flow direction from tracked objects
+        # DEPRECATED: Old flow direction calculation
+        # Replaced by physics-based flow analysis
+        # try:
+        #     directions = [obj['direction'] for obj in tracked_objects if obj.get('direction') != 'Unknown']
+        #     flow_dir = calculate_flow_direction_from_directions(directions)
+        # except Exception as e:
+        #     print(f"Flow direction calculation error: {e}")
+        #     flow_dir = 'Unknown'
+        
+        # Calculate physics-based flow metrics
+        flow_dir = 'Unknown'  # Placeholder, will be updated with physics metrics
+        physics_flow_metrics = None
         try:
-            directions = [obj['direction'] for obj in tracked_objects if obj.get('direction') != 'Unknown']
-            flow_dir = calculate_flow_direction_from_directions(directions)
+            # Convert density to people/m² for physics calculation
+            # Current density is normalized (people per 10000 pixels)
+            density_per_m2 = density * 10000 * pixel_to_meter * pixel_to_meter
+            
+            # Calculate physics flow metrics
+            physics_flow_result = compute_physics_flow_metrics(
+                tracked_objects=tracked_objects,
+                density=density_per_m2,
+                pixel_to_meter=pixel_to_meter,
+                fps=fps,
+                zone_id="global"
+            )
+            physics_flow_metrics = physics_flow_result
+            flow_dir = f"{physics_flow_result['congestion_level']}"  # Use congestion level as flow indicator
         except Exception as e:
-            print(f"Flow direction calculation error: {e}")
-            flow_dir = 'Unknown'
+            print(f"Physics flow calculation error: {e}")
+            physics_flow_metrics = None
         
         # Calculate average speed
         try:
@@ -553,7 +652,8 @@ def process_frame_with_deep_sort(frame, model_v11, model_v8, tracker: ObjectTrac
             'risk_color': risk_color,
             'model_info': model_info,
             'avg_speed': avg_speed,
-            'tracked_objects': tracked_objects
+            'tracked_objects': tracked_objects,
+            'physics_flow_metrics': physics_flow_metrics  # Add physics flow metrics
         }
         
     except Exception as e:
@@ -574,7 +674,8 @@ def process_frame_with_deep_sort(frame, model_v11, model_v8, tracker: ObjectTrac
             'risk_color': (0, 255, 0),
             'model_info': {'error': str(e)},
             'avg_speed': 0.0,
-            'tracked_objects': []
+            'tracked_objects': [],
+            'physics_flow_metrics': None  # Add physics flow metrics
         }
 
 def calculate_flow_direction_from_directions(directions: List[str]) -> str:

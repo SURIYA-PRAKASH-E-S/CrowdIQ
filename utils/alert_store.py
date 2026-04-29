@@ -215,13 +215,32 @@ class AlertStore:
             alerts = []
             for key, row in data.items():
                 row["id"] = key
-                # Filter by timestamp
+                # Filter by timestamp - handle both string (ISO) and float (Unix timestamp) formats
                 alert_time = row.get("timestamp", "")
-                if alert_time >= cutoff_time:
-                    alerts.append(row)
+                try:
+                    # If alert_time is a float (Unix timestamp), convert to ISO string for comparison
+                    if isinstance(alert_time, (int, float)):
+                        alert_time_iso = datetime.fromtimestamp(alert_time).isoformat()
+                    else:
+                        alert_time_iso = str(alert_time)
+                    if alert_time_iso >= cutoff_time:
+                        alerts.append(row)
+                except (ValueError, TypeError):
+                    # Skip alerts with invalid timestamps
+                    continue
             
-            # Sort by timestamp descending
-            alerts.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            # Sort by timestamp descending - handle both string (ISO) and float (Unix timestamp) formats
+            def get_sort_timestamp(alert):
+                ts = alert.get("timestamp", "")
+                if isinstance(ts, (int, float)):
+                    return ts  # Unix timestamp, compare directly
+                try:
+                    # Try to parse ISO string to datetime
+                    dt = datetime.fromisoformat(str(ts))
+                    return dt.timestamp()
+                except (ValueError, TypeError):
+                    return 0.0  # Fallback for invalid timestamps
+            alerts.sort(key=get_sort_timestamp, reverse=True)
             
             # Update cache
             self._cached_alerts = alerts
@@ -263,7 +282,18 @@ class AlertStore:
                     for key, row in all_data.items():
                         row["id"] = key
                         alerts.append(row)
-                    alerts.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+                    # Sort by timestamp - handle both string (ISO) and float (Unix timestamp) formats
+                    def get_sort_timestamp(alert):
+                        ts = alert.get("timestamp", "")
+                        if isinstance(ts, (int, float)):
+                            return ts  # Unix timestamp, compare directly
+                        try:
+                            # Try to parse ISO string to datetime
+                            dt = datetime.fromisoformat(str(ts))
+                            return dt.timestamp()
+                        except (ValueError, TypeError):
+                            return 0.0  # Fallback for invalid timestamps
+                    alerts.sort(key=get_sort_timestamp, reverse=True)
                     return pd.DataFrame(alerts[:limit])
                 else:
                     raise
@@ -271,13 +301,24 @@ class AlertStore:
             if not data:
                 return pd.DataFrame()
             
-            # Convert to list and reverse
+            # Convert to list and sort by timestamp descending
             alerts = []
             for key, row in data.items():
                 row["id"] = key
                 alerts.append(row)
             
-            alerts.reverse()
+            # Sort by timestamp descending - handle both string (ISO) and float (Unix timestamp) formats
+            def get_sort_timestamp(alert):
+                ts = alert.get("timestamp", "")
+                if isinstance(ts, (int, float)):
+                    return ts  # Unix timestamp, compare directly
+                try:
+                    # Try to parse ISO string to datetime
+                    dt = datetime.fromisoformat(str(ts))
+                    return dt.timestamp()
+                except (ValueError, TypeError):
+                    return 0.0  # Fallback for invalid timestamps
+            alerts.sort(key=get_sort_timestamp, reverse=True)
             return pd.DataFrame(alerts)
             
         except Exception as e:

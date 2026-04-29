@@ -2,7 +2,7 @@
 
 A comprehensive real-time crowd monitoring and analysis system powered by AI/ML for intelligent surveillance, risk assessment, and crowd management.
 
-**🔗 Live Demo**: [ICSS](https://icss2026vps.streamlit.app/)
+**🔗 Live Demo**: [ICSS]()
 
 ---
 
@@ -1332,4 +1332,3 @@ This project is for educational and research purposes.
 
 **Built with using Streamlit, YOLO, PyTorch and OpenCV**
 
-**Developed by [ES](https://github.com/SURIYA-PRAKASH-E-S)**

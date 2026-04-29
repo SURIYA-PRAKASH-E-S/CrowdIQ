@@ -39,6 +39,14 @@ from utils.crowd_analytics import (
 from utils.zone_analyzer import (
     ZoneAnalyzer, calculate_crowd_bounding_area, draw_crowd_area
 )
+from utils.crowd_mapping import (
+    load_map, draw_zones, create_sample_zones, generate_dummy_data,
+    get_risk_color, calculate_risk_level, add_heatmap_layer,
+    check_alerts, get_zone_statistics, render_map_component
+)
+from utils.zone_manager import ZoneManager, fetch_realtime_data, create_zone_manager
+from utils.physics_flow import PhysicsFlowAnalyzer, format_flow_metrics_text, draw_flow_arrow, get_congestion_color
+from firebase_client import get_db, is_connected as firebase_is_connected
 from camera1 import MobileCameraStream, render_mobile_camera_sidebar
 from utils.alert_manager import AlertManager, AlertType, AlertSeverity, AlertNotifier
 
@@ -226,7 +234,7 @@ st.session_state['model_v11m'] = model_v11m
 
 # Model selection in session state
 if 'active_models' not in st.session_state:
-    st.session_state.active_models = ["v11", "v8"]  # Use both by default
+    st.session_state.active_models = ["v11"]  # Use single model by default
 
 # ================= SESSION STATE MANAGER =================
 class SessionStateManager:
@@ -403,6 +411,13 @@ class VideoProcessor(VideoTransformerBase):
             real_world_width_m=50.0,
             real_world_height_m=30.0
         )
+        
+        # Initialize physics-based flow analyzer
+        self.physics_flow_analyzer = PhysicsFlowAnalyzer(
+            pixel_to_meter=0.01,  # Default: 1 pixel = 0.01 meters
+            fps=30.0,
+            smoothing_window=5
+        )
 
     def resize_frame(self, frame, target_size=(640, 480)):
         """Resize frame for faster inference while maintaining aspect ratio"""
@@ -460,7 +475,7 @@ class VideoProcessor(VideoTransformerBase):
             # Read toggle states from session_manager (thread-safe) so Controls-tab changes take effect
             enable_deep_sort = session_manager.get_data('enable_deep_sort', True)
             enable_advanced_analytics = session_manager.get_data('enable_advanced_analytics', False)
-            active_models = session_manager.get_data('active_models', ["v11", "v8"])
+            active_models = session_manager.get_data('active_models', ["v11"])
             low_threshold = 0.5  # Default thresholds
             medium_threshold = 1.0
             count_threshold = 8
@@ -531,6 +546,29 @@ class VideoProcessor(VideoTransformerBase):
                 annotated_img = draw_crowd_overlay(
                     annotated_img, crowd_metrics, position=(w-240, 30), font_scale=0.55
                 )
+                
+                # Draw physics-based flow metrics overlay
+                if tracking_result.get('physics_flow_metrics', {}):
+                    physics_metrics = tracking_result['physics_flow_metrics']
+                    flow_text = format_flow_metrics_text(physics_metrics)
+                    # Get color based on congestion level
+                    congestion_color = get_congestion_color(physics_metrics.get('congestion_level', 'Free'))
+                    cv2.putText(annotated_img, flow_text, (20, h-30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, congestion_color, 2)
+                    
+                    # Draw flow arrow at center of frame showing average flow direction
+                    avg_vector = physics_metrics.get('avg_vector', (0, 0))
+                    flow_rate = physics_metrics.get('flow_rate', 0.0)
+                    congestion_level = physics_metrics.get('congestion_level', 'Free')
+                    
+                    # Only draw arrow if there's significant movement
+                    if abs(avg_vector[0]) > 1 or abs(avg_vector[1]) > 1:
+                        center_x = w // 2
+                        center_y = h // 2
+                        annotated_img = draw_flow_arrow(
+                            annotated_img, center_x, center_y, 
+                            avg_vector, flow_rate, congestion_level
+                        )
                 
                 # Add heatmap overlay if enabled (reads live toggle from Controls tab)
                 if session_manager.get_data('enable_density_heatmap', True) and tracked_objs:
@@ -643,6 +681,9 @@ class VideoProcessor(VideoTransformerBase):
                     self._last_saved_alert_count = 0
                 
                 # Add crowd level to frame data
+                # Extract physics flow metrics from tracking result
+                physics_metrics = tracking_result.get('physics_flow_metrics', {})
+                
                 frame_data = {
                     'people_count': people_count,
                     'density': density,
@@ -656,7 +697,12 @@ class VideoProcessor(VideoTransformerBase):
                     'alerts': [],
                     'crowd_level': crowd_metrics.get('crowd_level', 'Low'),
                     'peak_count': crowd_metrics.get('peak_count', 0),
-                    'average_count': crowd_metrics.get('average_count', 0)
+                    'average_count': crowd_metrics.get('average_count', 0),
+                    # Physics-based flow metrics
+                    'flow_rate': physics_metrics.get('flow_rate', 0.0),
+                    'congestion_index': physics_metrics.get('congestion_index', 0.0),
+                    'congestion_level': physics_metrics.get('congestion_level', 'Unknown'),
+                    'physics_flow_metrics': physics_metrics
                 }
                 
                 # Store processed frame for frame skipping
@@ -761,6 +807,9 @@ class VideoProcessor(VideoTransformerBase):
                     crowd_level   = frame_data.get('crowd_level', 'Low'),
                     peak_count    = frame_data.get('peak_count', 0),
                     average_count = frame_data.get('average_count', 0.0),
+                    flow_rate     = frame_data.get('flow_rate', 0.0),
+                    avg_speed     = frame_data.get('avg_speed', 0.0),
+                    congestion_index = frame_data.get('congestion_index', 0.0),
                 )
 
             # === ICSS UPDATE: TASK 2 - Call process_alert for real-time alerts ===
@@ -769,7 +818,13 @@ class VideoProcessor(VideoTransformerBase):
             people_count = frame_data.get('people_count', 0)
             density = frame_data.get('density', 0.0)
             
-            print(f"[WEBCAM DEBUG] risk_level={risk_lvl}, count={people_count}, density={density:.3f}")
+            # Physics-based congestion alerts
+            congestion_index = frame_data.get('congestion_index', 0.0)
+            congestion_level = frame_data.get('congestion_level', 'Free')
+            flow_rate = frame_data.get('flow_rate', 0.0)
+            avg_speed = frame_data.get('avg_speed', 0.0)
+            
+            print(f"[WEBCAM DEBUG] risk_level={risk_lvl}, count={people_count}, density={density:.3f}, congestion={congestion_index:.2f}")
             
             if risk_lvl == 'HIGH':
                 severity = 'HIGH'
@@ -781,6 +836,47 @@ class VideoProcessor(VideoTransformerBase):
                 severity = 'LOW'
             else:
                 severity = 'LOW'
+            
+            # Check congestion-based alerts
+            congestion_alert = None
+            if congestion_index >= 1.0:
+                congestion_alert = {
+                    "timestamp": time.time(),
+                    "type": "congestion",
+                    "severity": "CRITICAL",
+                    "count": people_count,
+                    "density": density,
+                    "congestion_index": congestion_index,
+                    "message": f"⚠️ DANGEROUS CONGESTION: C={congestion_index:.2f} - Risk of stampede"
+                }
+            elif congestion_index >= 0.5 and flow_rate > 2.0:
+                congestion_alert = {
+                    "timestamp": time.time(),
+                    "type": "flow_surge",
+                    "severity": "HIGH",
+                    "count": people_count,
+                    "density": density,
+                    "flow_rate": flow_rate,
+                    "message": f"⚠️ FLOW SURGE: Q={flow_rate:.2f} - High flow rate detected"
+                }
+            elif density > 2.0 and avg_speed < 0.3:
+                congestion_alert = {
+                    "timestamp": time.time(),
+                    "type": "bottleneck",
+                    "severity": "HIGH",
+                    "count": people_count,
+                    "density": density,
+                    "avg_speed": avg_speed,
+                    "message": f"⚠️ BOTTLENECK: High density ({density:.2f}) with low speed ({avg_speed:.2f} m/s)"
+                }
+            
+            # Process congestion alert if present
+            if congestion_alert:
+                try:
+                    from utils.alert_manager import process_alert
+                    process_alert(congestion_alert)
+                except Exception as e:
+                    pass  # Don't break the video loop for alert errors
 
             # Build alert data
             alert_data = {
@@ -1000,7 +1096,7 @@ if new_alerts:
     st.session_state["alert_history"] = st.session_state["alert_history"][-100:]
     st.session_state["last_alert_refresh"] = time.time()
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🎥 Live Feed", "📊 Analytics", "🗺️ Map Area", "📂 Cloud DB", "⚙️ Controls", "🚨 Alerts"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["\U0001F3A5 Live Feed", "\U0001F4CA Analytics", "\U0001F4C2 Cloud DB", "\u2699 Controls", "\U0001F6A8 Alerts", "\U0001F5FA Crowd Zone Map"])
 
 with tab1:
     st.subheader("Live Surveillance Feed")
@@ -1081,23 +1177,18 @@ with tab1:
             except Exception:
                 st.session_state.csrnet_estimator = None
         csrnet_estimator = st.session_state.csrnet_estimator
-        if csrnet_estimator is not None and csrnet_estimator.is_available():
-            st.success("✅ CSRNet Active")
-        else:
-            st.warning("⚠️ CSRNet Not Loaded — Using YOLO count only")
-        
         # ISSUE 2 FIX: Debug panel
         st.markdown("### 🔍 Debug Panel")
         if st.session_state.current_frame_data:
             data = st.session_state.current_frame_data
-            yolo_detections = len(data.get('tracked_objects', []))
-            deep_sort_tracks = len(data.get('tracked_objects', []))
+            people_count = data.get('people_count', 0)
             current_density = data.get('density', 0.0)
+            flow_direction = data.get('flow_direction', 'Unknown')
             current_risk = data.get('risk_level', 'Unknown')
             
-            st.metric("YOLO Detections", yolo_detections)
-            st.metric("Deep SORT Tracks", deep_sort_tracks)
+            st.metric("People Count", people_count)
             st.metric("Density", f"{current_density:.4f}")
+            st.metric("Flow Direction", flow_direction)
             st.metric("Risk Level", current_risk)
         else:
             st.info("No frame data yet")
@@ -1142,18 +1233,32 @@ with tab1:
             st.session_state.camera_source = "webcam"
             
             # ================= WEBRTC STREAM =================
-            try:
-                webrtc_streamer(
-                    key="crowd-detection",
-                    rtc_configuration=RTC_CONFIGURATION,
-                    video_processor_factory=VideoProcessor,
-                    media_stream_constraints={"video": True, "audio": False},
-                    async_processing=True,
-                )
-            except AttributeError:
-                # streamlit-webrtc internal _polling_thread not yet initialised
-                # on rapid reruns — safe to ignore, component will recover.
-                st.info("Camera initialising — please wait a moment.")
+            # Use a container with fixed dimensions to prevent zooming
+            video_container = st.container()
+            with video_container:
+                # Apply CSS to fix video size and prevent zoom
+                st.markdown("""
+                <style>
+                div[data-testid="stVideo"] > div > video {
+                    width: 100% !important;
+                    height: auto !important;
+                    object-fit: contain !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                try:
+                    webrtc_streamer(
+                        key="crowd-detection",
+                        rtc_configuration=RTC_CONFIGURATION,
+                        video_processor_factory=VideoProcessor,
+                        media_stream_constraints={"video": True, "audio": False},
+                        async_processing=True,
+                    )
+                except AttributeError:
+                    # streamlit-webrtc internal _polling_thread not yet initialised
+                    # on rapid reruns — safe to ignore, component will recover.
+                    st.info("Camera initialising — please wait a moment.")
         elif st.session_state.input_mode == "Mobile Camera (IP Webcam)":
             # Set camera source for alert workflow
             st.session_state.camera_source = "mobile"
@@ -1164,6 +1269,21 @@ with tab1:
             if cam_mode == "Browser WebRTC (no tunnel)":
                 # ── Option B: browser WebRTC (same as webcam mode) ──────────
                 st.info("📹 Browser WebRTC active — using your browser camera as the mobile source.")
+                
+                # Use a container with fixed dimensions to prevent zooming
+                video_container = st.container()
+                with video_container:
+                    # Apply CSS to fix video size and prevent zoom
+                    st.markdown("""
+                    <style>
+                    div[data-testid="stVideo"] > div > video {
+                        width: 100% !important;
+                        height: auto !important;
+                        object-fit: contain !important;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+                
                 try:
                     webrtc_streamer(
                         key="mobile-webrtc",
@@ -1214,7 +1334,7 @@ with tab1:
                     tracker_local      = st.session_state.get('tracker')
                     zone_analyzer_local = st.session_state.get('zone_analyzer')
                     alert_manager_local = st.session_state.get('alert_manager')
-                    active_models_local = st.session_state.get('active_models', ['v11'])
+                    active_models_local = st.session_state.get('active_models', ["v11"])
 
                     # ── MOBILE FEED LOOP ─────────────────────────────────
                     while not st.session_state.get('stop_mobile_feed', False):
@@ -1836,119 +1956,12 @@ with tab2:
                 height=350
             )
             st.plotly_chart(fig_flow, width='stretch')
+
     else:
         st.info("📊 No historical data available. Start video feed to collect analytics data for trend visualization.")
 
     with tab3:
-        # ================= DUCKDB ANALYTICS DASHBOARD =================
-        st.subheader("Zone Map & Area Analysis")
-        
-        # Zone Map Summary
-        st.markdown("### 🗺️ Zone Map Summary")
-        
-        if st.session_state.zone_summary:
-            zone_data = st.session_state.zone_summary
-            
-            # Overall statistics
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                total_zones = len(zone_data)
-                st.metric("Total Zones", total_zones)
-            
-            with col2:
-                total_people = sum(z['people_count'] for z in zone_data)
-                st.metric("Total People", total_people)
-            
-            with col3:
-                overcrowded_zones = [z for z in zone_data if z['is_overcrowded']]
-                st.metric("Overcrowded Zones", len(overcrowded_zones), 
-                         delta="Alert" if overcrowded_zones else "Clear")
-            
-            with col4:
-                avg_density = sum(z['density'] for z in zone_data) / len(zone_data)
-                st.metric("Avg Density", f"{avg_density:.3f} p/m²")
-            
-            # Zone details table
-            st.markdown("#### 📊 Zone Details")
-            zone_df_data = []
-            for zone in zone_data:
-                zone_df_data.append({
-                    'Zone ID': zone['zone_id'],
-                    'People Count': zone['people_count'],
-                    'Density (p/m²)': f"{zone['density']:.3f}",
-                    'Area (m²)': f"{zone.get('real_area_m2', 0.0):.1f}",
-                    'Status': '🔴 Overcrowded' if zone['is_overcrowded'] else '🟡 Moderate' if zone['density'] > 0.5 else '🟢 Normal',
-                    'Alert': '⚠️ Yes' if zone['is_overcrowded'] else '✅ No'
-                })
-            
-            st.dataframe(zone_df_data, width="stretch")
-            
-            # Zone alerts
-            if st.session_state.zone_alerts:
-                st.markdown("#### 🚨 Zone Alerts")
-                for alert in st.session_state.zone_alerts:
-                    st.warning(f"🗺️ {alert}")
-            else:
-                st.success("✅ No zone alerts active")
-                
-        else:
-            st.info("📊 No zone data available. Start video feed to see zone analysis.")
-        
-        # ROI Analysis
-        st.markdown("---")
-        st.markdown("### 📍 ROI (Region of Interest) Analysis")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**ROI Settings:**")
-            st.info(f"ROI Coordinates: ({st.session_state.roi_x1}, {st.session_state.roi_y1}) to ({st.session_state.roi_x2}, {st.session_state.roi_y2})")
-            roi_enabled = "✅ Enabled" if st.session_state.enable_roi else "❌ Disabled"
-            st.metric("ROI Status", roi_enabled)
-        
-        with col2:
-            st.markdown("**ROI Statistics:**")
-            if st.session_state.current_frame_data and st.session_state.enable_roi:
-                tracked_objects = st.session_state.current_frame_data.get('tracked_objects', [])
-                roi_bbox = (st.session_state.roi_x1, st.session_state.roi_y1, st.session_state.roi_x2, st.session_state.roi_y2)
-                
-                # Count people in ROI
-                people_in_roi = 0
-                for obj in tracked_objects:
-                    x, y = obj.get('position', (0, 0))
-                    if st.session_state.roi_x1 <= x <= st.session_state.roi_x2 and st.session_state.roi_y1 <= y <= st.session_state.roi_y2:
-                        people_in_roi += 1
-                
-                roi_area = (st.session_state.roi_x2 - st.session_state.roi_x1) * (st.session_state.roi_y2 - st.session_state.roi_y1)
-                roi_density = people_in_roi / (roi_area / 10000) if roi_area > 0 else 0  # Convert to m²
-                
-                st.metric("People in ROI", people_in_roi)
-                st.metric("ROI Density", f"{roi_density:.3f} p/m²")
-            else:
-                st.metric("People in ROI", "--")
-                st.metric("ROI Density", "--")
-        
-        # Zone grid visualization settings
-        st.markdown("---")
-        st.markdown("### ⚙️ Zone Display Settings")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info("Zone grid settings are in the Controls tab under Dense Crowd Detection section")
-        
-        with col2:
-            show_crowd_area = st.checkbox(
-                "Show Crowd Bounding Area",
-                value=st.session_state.show_crowd_area,
-                help="Display crowd bounding area visualization"
-            )
-            st.session_state.show_crowd_area = show_crowd_area
-            session_manager.update_data('show_crowd_area', show_crowd_area)
-    
-    with tab4:
-        # ================= FIREBASE ANALYTICS DASHBOARD =================
+        # ================= TAB3: CLOUD DB ANALYTICS =================
         st.subheader("☁️ Cloud Database Analytics")
 
         if not db_is_connected():
@@ -2014,7 +2027,8 @@ with tab2:
             st.info(f"📊 Total Records: {total_records}")
             st.info("☁️ Database: Firebase Realtime Database")
 
-with tab5:
+with tab4:
+        # ================= TAB4: SYSTEM CONTROLS =================
         st.subheader("⚙️ System Controls")
 
         # ── Model selection — explicit keys so state survives tab switches ──
@@ -2074,24 +2088,25 @@ with tab5:
             "Enable Advanced Analytics Platform",
             value=st.session_state.get("enable_advanced_analytics", True),
             key="ctrl_enable_advanced_analytics",
-            help="Enable intelligent risk assessment, zone monitoring, and flow analysis",
+            help="Enable intelligent risk assessment and flow analysis (zone monitoring deprecated)",
         )
         session_manager.update_data('enable_advanced_analytics', st.session_state.enable_advanced_analytics)
 
         if st.session_state.enable_advanced_analytics:
-            st.success("🧠 Advanced Analytics ENABLED - Risk, Zones, Flow Analysis")
+            st.success("🧠 Advanced Analytics ENABLED - Risk, Flow Analysis")
 
             st.markdown("**Analytics Modules:**")
             col1, col2 = st.columns(2)
 
             with col1:
-                st.session_state.enable_zones = st.checkbox(
-                    "Zone Monitoring",
-                    value=st.session_state.get("enable_zones", True),
-                    key="ctrl_enable_zones",
-                    help="Enable zone-based crowd analysis",
-                )
-                session_manager.update_data('enable_zones', st.session_state.enable_zones)
+                # DEPRECATED: Zone Monitoring disabled - using PhysicsFlowAnalyzer instead
+                # st.session_state.enable_zones = st.checkbox(
+                #     "Zone Monitoring",
+                #     value=st.session_state.get("enable_zones", True),
+                #     key="ctrl_enable_zones",
+                #     help="Enable zone-based crowd analysis",
+                # )
+                # session_manager.update_data('enable_zones', st.session_state.enable_zones)
                 st.session_state.enable_flow_analysis = st.checkbox(
                     "Flow Analysis",
                     value=st.session_state.get("enable_flow_analysis", True),
@@ -2136,26 +2151,27 @@ with tab5:
                 )
                 session_manager.update_data('enable_density_heatmap', st.session_state.enable_density_heatmap)
             with col2:
-                # Zone grid settings removed per FIX 3
+                # DEPRECATED: Zone grid settings removed - using PhysicsFlowAnalyzer instead
                 st.info("Zone grid feature has been removed")
 
-            grid_rows = st.slider(
-                "Zone Grid Rows",
-                min_value=2, max_value=5,
-                value=st.session_state.dense_grid_size[0],
-                step=1,
-                key="ctrl_grid_rows",
-                help="Number of rows in zone grid",
-            )
-            grid_cols = st.slider(
-                "Zone Grid Columns",
-                min_value=2, max_value=5,
-                value=st.session_state.dense_grid_size[1],
-                step=1,
-                key="ctrl_grid_cols",
-                help="Number of columns in zone grid",
-            )
-            st.session_state.dense_grid_size = (grid_rows, grid_cols)
+            # DEPRECATED: Zone grid sliders removed
+            # grid_rows = st.slider(
+            #     "Zone Grid Rows",
+            #     min_value=2, max_value=5,
+            #     value=st.session_state.dense_grid_size[0],
+            #     step=1,
+            #     key="ctrl_grid_rows",
+            #     help="Number of rows in zone grid",
+            # )
+            # grid_cols = st.slider(
+            #     "Zone Grid Columns",
+            #     min_value=2, max_value=5,
+            #     value=st.session_state.dense_grid_size[1],
+            #     step=1,
+            #     key="ctrl_grid_cols",
+            #     help="Number of columns in zone grid",
+            # )
+            # st.session_state.dense_grid_size = (grid_rows, grid_cols)
         else:
             st.info("📊 Dense Crowd Detection DISABLED - Standard detection mode")
         
@@ -2254,53 +2270,54 @@ with tab5:
                 st.info(f"Normalized weights: Density={st.session_state.risk_weights['density']:.2f}, Flow={st.session_state.risk_weights['flow_conflict']:.2f}, Speed={st.session_state.risk_weights['speed_variation']:.2f}")
             
             # Zone Configuration
-            if st.session_state.get('enable_zones', True):
-                st.markdown("#### 🗺️ Zone Configuration")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    grid_rows = st.selectbox(
-                        "Grid Rows",
-                        options=[2, 3, 4],
-                        index=[2, 3, 4].index(st.session_state.zone_grid_size[0]),
-                        help="Number of rows in zone grid"
-                    )
-                    
-                    grid_cols = st.selectbox(
-                        "Grid Columns", 
-                        options=[2, 3, 4],
-                        index=[2, 3, 4].index(st.session_state.zone_grid_size[1]),
-                        help="Number of columns in zone grid"
-                    )
-                    
-                    st.session_state.zone_grid_size = (grid_rows, grid_cols)
-                
-                with col2:
-                    # Restricted zones selection
-                    zone_labels = []
-                    for i in range(grid_rows * grid_cols):
-                        label = chr(65 + i)  # A, B, C, D, ...
-                        zone_labels.append(label)
-                    
-                    selected_restrictions = st.multiselect(
-                        "Restricted Zones",
-                        options=zone_labels,
-                        default=st.session_state.restricted_zones,
-                        help="Select zones to mark as restricted areas"
-                    )
-                    
-                    st.session_state.restricted_zones = selected_restrictions
-                
-                st.info(f"Zone grid: {grid_rows}x{grid_cols} = {grid_rows * grid_cols} zones")
-                if selected_restrictions:
-                    st.warning(f"Restricted zones: {', '.join(selected_restrictions)}")
+            # if st.session_state.get('enable_zones', True):
+            #     st.markdown("#### 🗺️ Zone Configuration")
+            #     
+            #     col1, col2 = st.columns(2)
+            #     
+            #     with col1:
+            #         grid_rows = st.selectbox(
+            #             "Grid Rows",
+            #             options=[2, 3, 4],
+            #             index=[2, 3, 4].index(st.session_state.zone_grid_size[0]),
+            #             help="Number of rows in zone grid"
+            #         )
+            #         
+            #         grid_cols = st.selectbox(
+            #             "Grid Columns", 
+            #             options=[2, 3, 4],
+            #             index=[2, 3, 4].index(st.session_state.zone_grid_size[1]),
+            #             help="Number of columns in zone grid"
+            #         )
+            #         
+            #         st.session_state.zone_grid_size = (grid_rows, grid_cols)
+            #     
+            #     with col2:
+            #         # Restricted zones selection
+            #         zone_labels = []
+            #         for i in range(grid_rows * grid_cols):
+            #             label = chr(65 + i)  # A, B, C, D, ...
+            #             zone_labels.append(label)
+            #         
+            #         selected_restrictions = st.multiselect(
+            #             "Restricted Zones",
+            #             options=zone_labels,
+            #             default=st.session_state.restricted_zones,
+            #             help="Select zones to mark as restricted areas"
+            #         )
+            #         
+            #         st.session_state.restricted_zones = selected_restrictions
+            #     
+            #     st.info(f"Zone grid: {grid_rows}x{grid_cols} = {grid_rows * grid_cols} zones")
+            #     if selected_restrictions:
+            #         st.warning(f"Restricted zones: {', '.join(selected_restrictions)}")
             
             # Flow Analysis Configuration
             if st.session_state.get('enable_flow_analysis', True):
                 st.markdown("#### 🌊 Flow Analysis Settings")
                 
                 col1, col2 = st.columns(2)
+# ... (rest of the code remains the same)
                 
                 with col1:
                     min_movement = st.slider(
@@ -2394,49 +2411,6 @@ with tab5:
         **Accuracy:** High precision person detection
         """)
 
-# ================= SIDEBAR - ZONE MAP SUMMARY & ROI CONTROLS =================
-st.sidebar.markdown("---")
-st.sidebar.subheader("🗺️ Zone Map Summary")
-
-if st.session_state.zone_summary:
-    overcrowded = [z for z in st.session_state.zone_summary if z['is_overcrowded']]
-    safest = min(st.session_state.zone_summary, key=lambda z: z['density'])
-    densest = max(st.session_state.zone_summary, key=lambda z: z['density'])
-
-    st.sidebar.metric("Total Zones", len(st.session_state.zone_summary))
-    st.sidebar.metric("🚨 Overcrowded", len(overcrowded),
-                      delta=None if not overcrowded else "ACTION NEEDED")
-    st.sidebar.metric("Densest Zone",
-                      f"{densest['zone_id']} ({densest['density']:.3f} p/m²)")
-    st.sidebar.metric("Safest Zone",
-                      f"{safest['zone_id']} ({safest['density']:.3f} p/m²)")
-else:
-    st.sidebar.info("No zone data yet")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("📍 Manual ROI Region")
-
-frame_w = 640
-frame_h = 480
-
-roi_x1 = st.sidebar.number_input("ROI X1 (pixel)", 0, frame_w, st.session_state.roi_x1, key="sidebar_roi_x1")
-roi_y1 = st.sidebar.number_input("ROI Y1 (pixel)", 0, frame_h, st.session_state.roi_y1, key="sidebar_roi_y1")
-roi_x2 = st.sidebar.number_input("ROI X2 (pixel)", 0, frame_w, st.session_state.roi_x2, key="sidebar_roi_x2")
-roi_y2 = st.sidebar.number_input("ROI Y2 (pixel)", 0, frame_h, st.session_state.roi_y2, key="sidebar_roi_y2")
-enable_roi = st.sidebar.checkbox("✅ Enable ROI Analysis", value=st.session_state.enable_roi, key="sidebar_enable_roi")
-
-# Update session state
-st.session_state.roi_x1 = roi_x1
-st.session_state.roi_y1 = roi_y1
-st.session_state.roi_x2 = roi_x2
-st.session_state.roi_y2 = roi_y2
-st.session_state.enable_roi = enable_roi
-
-if enable_roi:
-    st.sidebar.success("ROI Analysis Enabled")
-else:
-    st.sidebar.info("ROI Analysis Disabled")
-
 # ================= SIDEBAR - MOBILE CAMERA CONTROLS =================
 render_mobile_camera_sidebar(st.session_state)
 
@@ -2453,15 +2427,378 @@ if stats['active_alerts'] > 0:
 else:
     st.sidebar.success("✅ No Active Alerts")
 
-st.sidebar.metric("Total Alerts",    stats['total_alerts'])
-st.sidebar.metric("High Risk",       stats['high_risk_count'])
-st.sidebar.metric("Surge Detected",  stats['surge_count'])
-st.sidebar.metric("Zone Alerts",     stats['zone_alert_count'])
 
-# ================= TAB6: ENHANCED ALERTS DASHBOARD =================
-with tab6:
+# ================= TAB5: ENHANCED ALERTS DASHBOARD =================
+with tab5:
     # Import the enhanced alert tab component
     from components.alert_tab import render_enhanced_alert_tab
-    
+
     # Render the enhanced alert tab with live monitoring, email toggle, and Cloudinary integration
     render_enhanced_alert_tab()
+
+# ================= TAB6: CROWD ZONE MAP (Simulation + Live Detection) =================
+with tab6:
+    import folium
+    from streamlit_folium import st_folium
+    from math import radians, cos, sin, sqrt, atan2, floor
+
+    st.subheader("🗺️ Crowd Zone Map — Simulation & Live Detection")
+
+    # ── Helper: Haversine distance ──────────────────────────────────────
+    def _haversine(lat1, lon1, lat2, lon2):
+        R = 6371000.0
+        phi1, phi2 = radians(lat1), radians(lat2)
+        dphi = radians(lat2 - lat1)
+        dlam = radians(lon2 - lon1)
+        a = sin(dphi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(dlam / 2) ** 2
+        return 2 * R * atan2(sqrt(a), sqrt(1 - a))
+
+    # ── Helper: Shoelace area from lat/lon → sq.m ──────────────────────
+    def _polygon_area_sqm(coords):
+        if len(coords) < 3:
+            return 0.0
+        ref_lat = coords[0][0]
+        ref_lon = coords[0][1]
+        m_coords = []
+        for lat, lon in coords:
+            dx = _haversine(ref_lat, ref_lon, ref_lat, lon)
+            dy = _haversine(ref_lat, ref_lon, lat, ref_lon)
+            if lon < ref_lon:
+                dx = -dx
+            if lat < ref_lat:
+                dy = -dy
+            m_coords.append((dx, dy))
+        n = len(m_coords)
+        area = 0.0
+        for i in range(n):
+            j = (i + 1) % n
+            area += m_coords[i][0] * m_coords[j][1]
+            area -= m_coords[j][0] * m_coords[i][1]
+        return abs(area) / 2.0
+
+    # ── Helper: Density color ───────────────────────────────────────────
+    def _density_color(density):
+        if density < 0.5:
+            return "#28a745"
+        elif density <= 1.5:
+            return "#ffc107"
+        else:
+            return "#dc3545"
+
+    # ── Session state defaults ──────────────────────────────────────────
+    if "zone_map_mode" not in st.session_state:
+        st.session_state.zone_map_mode = "Manual Simulation"
+    if "zone_corners" not in st.session_state:
+        st.session_state.zone_corners = [
+            [28.6139, 77.2090],
+            [28.6139, 77.2110],
+            [28.6159, 77.2110],
+            [28.6159, 77.2090],
+        ]
+    if "zone_area_result" not in st.session_state:
+        st.session_state.zone_area_result = None
+    if "zone_sim_count" not in st.session_state:
+        st.session_state.zone_sim_count = 0
+    if "density_scenario" not in st.session_state:
+        st.session_state.density_scenario = "Safe Crowd"
+
+    # ── Layout: two columns ─────────────────────────────────────────────
+    col_left, col_right = st.columns([1, 2])
+
+    # =================== LEFT COLUMN — INPUT PANEL ======================
+    with col_left:
+        # ── SECTION 3: Mode toggle ──────────────────────────────────────
+        st.markdown("### 🔀 Detection Mode")
+        detection_mode = st.radio(
+            "Select Mode:",
+            ["🔴 Live Detection Mode", "🔵 Manual Simulation Mode"],
+            index=0 if st.session_state.zone_map_mode == "Live Detection" else 1,
+            key="zone_mode_radio",
+        )
+        st.session_state.zone_map_mode = "Live Detection" if "Live" in detection_mode else "Manual Simulation"
+
+        # ── SECTION 1: Coordinate Input ─────────────────────────────────
+        st.markdown("### 📐 Zone Coordinates")
+        st.caption("Enter 4 corner points of the polygon zone")
+
+        corner_labels = ["Corner 1 (Top-Left)", "Corner 2 (Top-Right)",
+                         "Corner 3 (Bottom-Right)", "Corner 4 (Bottom-Left)"]
+        corners = []
+        for i, label in enumerate(corner_labels):
+            st.markdown(f"**{label}**")
+            lat_col, lon_col = st.columns(2)
+            with lat_col:
+                c_lat = st.number_input(
+                    f"Lat {i+1}", value=st.session_state.zone_corners[i][0],
+                    format="%.6f", key=f"corner_lat_{i}",
+                )
+            with lon_col:
+                c_lon = st.number_input(
+                    f"Lon {i+1}", value=st.session_state.zone_corners[i][1],
+                    format="%.6f", key=f"corner_lon_{i}",
+                )
+            corners.append([c_lat, c_lon])
+        st.session_state.zone_corners = corners
+
+        # Calculate Area button
+        calc_clicked = st.button("📐 Calculate Area", key="zone_calc_area", use_container_width=True)
+
+        if calc_clicked:
+            area_sqm = _polygon_area_sqm(corners)
+            area_sqft = area_sqm * 10.7639
+            st.session_state.zone_area_result = {
+                "area_sqm": area_sqm,
+                "area_sqft": area_sqft,
+            }
+
+        # ── Result card ─────────────────────────────────────────────────
+        result = st.session_state.zone_area_result
+        if result:
+            st.markdown("---")
+            st.markdown("#### 📊 Area Results")
+            st.metric("📐 Area (sq.m)", f"{result['area_sqm']:.2f}")
+            st.metric("📏 Area (sq.ft)", f"{result['area_sqft']:.2f}")
+
+            # ── Density Scenario Selector ────────────────────────────────
+            st.markdown("---")
+            st.markdown("### 🎯 Crowd Density Scenario")
+            
+            density_scenarios = {
+                "🚨 Crush (Danger)": 0.09,
+                "⚠️ Very Dense": 0.25,
+                "✅ Safe Crowd": 0.5,
+                "🟢 Comfortable": 1.0,
+            }
+            
+            selected_scenario = st.radio(
+                "Select Density Scenario:",
+                options=list(density_scenarios.keys()),
+                index=2,  # Default to "✅ Safe Crowd"
+                key="density_scenario_radio",
+            )
+            st.session_state.density_scenario = selected_scenario.split()[-1]  # Extract scenario name
+            
+            # Recalculate safe capacity based on selected scenario
+            m2_per_person = density_scenarios[selected_scenario]
+            safe_cap = floor(result['area_sqm'] / m2_per_person) if result['area_sqm'] > 0 else 0
+            
+            # Update session state with new safe capacity
+            st.session_state.zone_area_result["safe_capacity"] = safe_cap
+            
+            st.metric("👥 Estimated Safe Capacity", f"{safe_cap} people")
+
+        # ── SECTION 3 continued: crowd count source ─────────────────────
+        st.markdown("---")
+        if st.session_state.zone_map_mode == "Live Detection":
+            live_data = st.session_state.get("current_frame_data")
+            if live_data:
+                current_count = live_data.get("people_count", 0)
+                st.success(f"🔴 Live Count: **{current_count}** people")
+            else:
+                current_count = 0
+                st.warning("No live feed data — start video in Tab 1")
+        else:
+            max_cap = result["safe_capacity"] if result else 1000
+            current_count = st.slider(
+                "🔵 Simulated Crowd Count",
+                min_value=0, max_value=max(max_cap, 1),
+                value=st.session_state.zone_sim_count,
+                key="zone_sim_slider",
+            )
+            st.session_state.zone_sim_count = current_count
+
+        # ── Auto-refresh toggle ─────────────────────────────────────────
+        auto_refresh = st.checkbox("Auto-refresh map (2s)", value=False, key="zone_auto_refresh")
+        if auto_refresh:
+            if "zone_last_refresh" not in st.session_state:
+                st.session_state.zone_last_refresh = time.time()
+            if time.time() - st.session_state.zone_last_refresh > 2:
+                st.session_state.zone_last_refresh = time.time()
+                st.rerun()
+
+    # =================== RIGHT COLUMN — MAP ============================
+    with col_right:
+        corners = st.session_state.zone_corners
+        result = st.session_state.zone_area_result
+        area_sqm = result["area_sqm"] if result else 0
+        safe_cap = result["safe_capacity"] if result else 0
+
+        # Determine current count
+        if st.session_state.zone_map_mode == "Live Detection":
+            live_data = st.session_state.get("current_frame_data")
+            current_count = live_data.get("people_count", 0) if live_data else 0
+        else:
+            current_count = st.session_state.get("zone_sim_count", 0)
+
+        # Density
+        density_val = current_count / area_sqm if area_sqm > 0 else 0.0
+        fill_color = _density_color(density_val)
+
+        # ── Build Folium map ────────────────────────────────────────────
+        centroid_lat = sum(c[0] for c in corners) / 4
+        centroid_lon = sum(c[1] for c in corners) / 4
+        min_lat = min(c[0] for c in corners)
+        max_lat = max(c[0] for c in corners)
+        min_lon = min(c[1] for c in corners)
+        max_lon = max(c[1] for c in corners)
+
+        m = folium.Map(location=[centroid_lat, centroid_lon], zoom_start=16,
+                       tiles="OpenStreetMap")
+
+        # 1. POLYGON ZONE HIGHLIGHT
+        if area_sqm > 0:
+            folium.Polygon(
+                locations=corners,
+                color="#3388ff",
+                fill=True,
+                fill_color=fill_color,
+                fill_opacity=0.35,
+                weight=2,
+                tooltip=f"Density: {density_val:.2f} p/m²",
+            ).add_to(m)
+
+            # 2. SQUARE GRID OVERLAY inside polygon bounding box
+            m_per_deg_lat = 111320.0
+            m_per_deg_lon = 111320.0 * cos(radians(centroid_lat))
+            d_lat_1m = 1.0 / m_per_deg_lat
+            d_lon_1m = 1.0 / m_per_deg_lon
+
+            # Limit grid to prevent excessive markers (max ~50x50)
+            grid_step_lat = d_lat_1m
+            grid_step_lon = d_lon_1m
+            lat_range = max_lat - min_lat
+            lon_range = max_lon - min_lon
+            num_rows = int(lat_range / grid_step_lat)
+            num_cols = int(lon_range / grid_step_lon)
+
+            # If grid is too dense, scale up step
+            if num_rows * num_cols > 2500:
+                scale = sqrt(num_rows * num_cols / 2500)
+                grid_step_lat *= scale
+                grid_step_lon *= scale
+                num_rows = int(lat_range / grid_step_lat)
+                num_cols = int(lon_range / grid_step_lon)
+
+            squares_drawn = 0
+            lat_cursor = min_lat
+            for r in range(num_rows):
+                lon_cursor = min_lon
+                for c_idx in range(num_cols):
+                    if squares_drawn >= current_count:
+                        break
+                    # Draw small rectangle
+                    sw = [lat_cursor, lon_cursor]
+                    ne = [lat_cursor + grid_step_lat, lon_cursor + grid_step_lon]
+                    folium.Rectangle(
+                        bounds=[sw, ne],
+                        color="#3388ff",
+                        fill=True,
+                        fill_color="#3388ff",
+                        fill_opacity=0.15,
+                        weight=0.5,
+                    ).add_to(m)
+                    # Place '^' person symbol at center of square
+                    center = [lat_cursor + grid_step_lat / 2, lon_cursor + grid_step_lon / 2]
+                    folium.Marker(
+                        location=center,
+                        icon=folium.DivIcon(
+                            html='<div style="font-size:8px;color:#003366;text-align:center;line-height:1;">^</div>',
+                            icon_size=(10, 10),
+                            icon_anchor=(5, 5),
+                        ),
+                    ).add_to(m)
+                    squares_drawn += 1
+                    lon_cursor += grid_step_lon
+                if squares_drawn >= current_count:
+                    break
+                lat_cursor += grid_step_lat
+
+        # 4. LIVE LOCATION MARKER (pulsing blue at centroid)
+        folium.CircleMarker(
+            location=[centroid_lat, centroid_lon],
+            radius=10,
+            color="#0066ff",
+            fill=True,
+            fill_color="#0066ff",
+            fill_opacity=0.7,
+            tooltip="📍 You are here",
+        ).add_to(m)
+        folium.Marker(
+            location=[centroid_lat, centroid_lon],
+            icon=folium.DivIcon(
+                html='<div style="font-size:12px;font-weight:bold;color:#fff;'
+                     'background:#0066ff;padding:2px 8px;border-radius:10px;'
+                     'white-space:nowrap;">📍 You are here</div>',
+                icon_size=(120, 20),
+                icon_anchor=(60, 25),
+            ),
+        ).add_to(m)
+
+        # 5. CROWD COUNT DISPLAY ON MAP (floating label)
+        cap_text = f"Zone Area: {area_sqm:.0f} sq.m | Capacity: {safe_cap} | Current: {current_count} | Density: {density_val:.2f} /sq.m"
+        folium.Marker(
+            location=[min_lat - 0.0005, centroid_lon],
+            icon=folium.DivIcon(
+                html=f'<div style="font-size:11px;font-weight:bold;color:#fff;'
+                     f'background:#333;padding:4px 10px;border-radius:6px;'
+                     f'white-space:nowrap;">{cap_text}</div>',
+                icon_size=(400, 24),
+                icon_anchor=(200, 12),
+            ),
+        ).add_to(m)
+
+        # ── Render map ──────────────────────────────────────────────────
+        st_folium(m, height=600, width="100%")
+
+        # ── SECTION 4: ALERT LOGIC ──────────────────────────────────────
+        if safe_cap > 0:
+            if current_count > safe_cap:
+                st.error("🚨 ALERT: Crowd exceeds safe capacity!")
+                # Push alert to Firebase
+                try:
+                    from firebase_client import get_db, is_connected as fb_conn
+                    if fb_conn():
+                        db = get_db()
+                        if db:
+                            zone_id = "zone_custom"
+                            db.child("alerts").child(zone_id).set({
+                                "timestamp": time.time(),
+                                "zone_id": zone_id,
+                                "current_count": current_count,
+                                "safe_capacity": safe_cap,
+                                "density": round(density_val, 4),
+                                "severity": "CRITICAL",
+                                "message": f"Crowd ({current_count}) exceeds safe capacity ({safe_cap})",
+                            })
+                except Exception:
+                    pass
+            elif current_count > 0.8 * safe_cap:
+                st.warning("⚠️ WARNING: Approaching capacity limit (80%)")
+                try:
+                    from firebase_client import get_db, is_connected as fb_conn
+                    if fb_conn():
+                        db = get_db()
+                        if db:
+                            zone_id = "zone_custom"
+                            db.child("alerts").child(zone_id).set({
+                                "timestamp": time.time(),
+                                "zone_id": zone_id,
+                                "current_count": current_count,
+                                "safe_capacity": safe_cap,
+                                "density": round(density_val, 4),
+                                "severity": "WARNING",
+                                "message": f"Crowd ({current_count}) approaching capacity ({safe_cap})",
+                            })
+                except Exception:
+                    pass
+
+        # ── Legend ──────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("### Legend")
+        leg1, leg2, leg3 = st.columns(3)
+        with leg1:
+            st.markdown("🟢 **Safe** — Density < 0.5 p/m²")
+        with leg2:
+            st.markdown("🟡 **Moderate** — Density 0.5–1.5 p/m²")
+        with leg3:
+            st.markdown("🔴 **Dangerous** — Density > 1.5 p/m²")

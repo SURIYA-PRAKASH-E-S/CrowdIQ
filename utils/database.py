@@ -63,9 +63,26 @@ def _init_local_db():
             risk_level TEXT NOT NULL,
             crowd_level TEXT,
             peak_count INTEGER DEFAULT 0,
-            average_count REAL DEFAULT 0.0
+            average_count REAL DEFAULT 0.0,
+            flow_rate REAL DEFAULT 0.0,
+            avg_speed REAL DEFAULT 0.0,
+            congestion_index REAL DEFAULT 0.0
         )
     ''')
+    
+    # Add new columns if table exists (for migration)
+    try:
+        cursor.execute("ALTER TABLE crowd_metrics ADD COLUMN flow_rate REAL DEFAULT 0.0")
+    except:
+        pass  # Column may already exist
+    try:
+        cursor.execute("ALTER TABLE crowd_metrics ADD COLUMN avg_speed REAL DEFAULT 0.0")
+    except:
+        pass  # Column may already exist
+    try:
+        cursor.execute("ALTER TABLE crowd_metrics ADD COLUMN congestion_index REAL DEFAULT 0.0")
+    except:
+        pass  # Column may already exist
     
     # Create alerts table
     cursor.execute('''
@@ -119,6 +136,9 @@ def insert_metric(
     crowd_level: str = "Low",
     peak_count: int = 0,
     average_count: float = 0.0,
+    flow_rate: float = 0.0,
+    avg_speed: float = 0.0,
+    congestion_index: float = 0.0,
 ) -> bool:
     """
     Insert one crowd-metrics row.
@@ -136,6 +156,9 @@ def insert_metric(
         "crowd_level": crowd_level,
         "peak_count": peak_count,
         "average_count": average_count,
+        "flow_rate": flow_rate,
+        "avg_speed": avg_speed,
+        "congestion_index": congestion_index,
     }
     
     # Check if Firebase is enabled
@@ -155,11 +178,12 @@ def insert_metric(
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO crowd_metrics 
-            (timestamp, people_count, density, flow_direction, risk_level, crowd_level, peak_count, average_count)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (timestamp, people_count, density, flow_direction, risk_level, crowd_level, peak_count, average_count, flow_rate, avg_speed, congestion_index)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             row['timestamp'], row['people_count'], row['density'], row['flow_direction'],
-            row['risk_level'], row['crowd_level'], row['peak_count'], row['average_count']
+            row['risk_level'], row['crowd_level'], row['peak_count'], row['average_count'],
+            row['flow_rate'], row['avg_speed'], row['congestion_index']
         ))
         conn.commit()
         conn.close()
