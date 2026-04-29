@@ -11,3 +11,6 @@ firebase-admin==6.5.0
 python-dotenv
 cloudinary
 plotly
+folium>=0.14.0
+streamlit-folium>=0.6.0
+geopandas>=0.14.0

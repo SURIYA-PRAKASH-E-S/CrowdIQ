@@ -1,6 +1,6 @@
 """
 Advanced Analytics Integration for Intelligent Crowd Surveillance
-Integrates Risk Engine, Zone Analyzer, and Flow Analyzer
+Integrates Risk Engine, Zone Analyzer, and Flow Analyzer (DEPRECATED - replaced by PhysicsFlowAnalyzer)
 """
 
 import numpy as np
@@ -8,7 +8,8 @@ import cv2
 from typing import Dict, List, Tuple, Optional
 from .risk_engine import SmartRiskEngine
 from .zone_analyzer import ZoneAnalyzer
-from .flow_analyzer import FlowAnalyzer
+# DEPRECATED: Old flow analyzer replaced by PhysicsFlowAnalyzer
+# from .flow_analyzer import FlowAnalyzer
 
 class AdvancedCrowdAnalytics:
     """
@@ -48,7 +49,8 @@ class AdvancedCrowdAnalytics:
             real_world_height_m=30.0
         )
         
-        self.flow_analyzer = FlowAnalyzer()
+        # DEPRECATED: Old flow analyzer replaced by PhysicsFlowAnalyzer
+        # self.flow_analyzer = FlowAnalyzer()
         
         # Frame dimensions
         self.frame_width = frame_width
@@ -57,7 +59,7 @@ class AdvancedCrowdAnalytics:
         # Analytics state
         self.analytics_enabled = True
         self.zone_analysis_enabled = True
-        self.flow_analysis_enabled = True
+        self.flow_analysis_enabled = False  # Disabled - using PhysicsFlowAnalyzer instead
         self.risk_analysis_enabled = True
     
     def extract_detections_from_tracking(self, tracking_results: List[Dict]) -> List[Tuple[int, int, int, int]]:
@@ -148,25 +150,29 @@ class AdvancedCrowdAnalytics:
             }
             analysis_results['alerts'].extend(zone_alerts)
         
-        # Flow Analysis
-        if self.flow_analysis_enabled:
-            flow_metrics = self.flow_analyzer.analyze_flow(tracking_results)
-            flow_summary = self.flow_analyzer.get_flow_summary(flow_metrics)
-            flow_alerts = self.flow_analyzer.get_flow_alerts(flow_metrics)
-            
-            analysis_results['flow_analysis'] = {
-                'metrics': flow_metrics,
-                'summary': flow_summary,
-                'alerts': flow_alerts
-            }
-            analysis_results['alerts'].extend(flow_alerts)
+        # Flow Analysis - DEPRECATED: Using PhysicsFlowAnalyzer instead
+        # if self.flow_analysis_enabled:
+        #     flow_metrics = self.flow_analyzer.analyze_flow(tracking_results)
+        #     flow_summary = self.flow_analyzer.get_flow_summary(flow_metrics)
+        #     flow_alerts = self.flow_analyzer.get_flow_alerts(flow_metrics)
+        #     
+        #     analysis_results['flow_analysis'] = {
+        #         'metrics': flow_metrics,
+        #         'summary': flow_summary,
+        #         'alerts': flow_alerts
+        #     }
+        #     analysis_results['alerts'].extend(flow_alerts)
+        
+        # Placeholder for physics-based flow metrics
+        analysis_results['flow_analysis'] = None
         
         # Risk Analysis
         if self.risk_analysis_enabled:
             # Extract risk factors
             density = basic_metrics['density']
-            flow_conflict = analysis_results['flow_analysis']['metrics'].flow_conflict_score if self.flow_analysis_enabled else 0.0
-            speed_variation = analysis_results['flow_analysis']['metrics'].speed_variation_score if self.flow_analysis_enabled else 0.0
+            # DEPRECATED: Old flow analyzer metrics - set to 0.0
+            flow_conflict = 0.0  # analysis_results['flow_analysis']['metrics'].flow_conflict_score if self.flow_analysis_enabled else 0.0
+            speed_variation = 0.0  # analysis_results['flow_analysis']['metrics'].speed_variation_score if self.flow_analysis_enabled else 0.0
             
             # Compute risk assessment
             risk_assessment = self.risk_engine.compute_comprehensive_risk(
@@ -243,9 +249,9 @@ class AdvancedCrowdAnalytics:
         if show_zones and self.zone_analysis_enabled:
             annotated_frame = self.zone_analyzer.draw_zones_on_frame(annotated_frame, show_labels=True)
         
-        # Draw flow arrows
-        if show_flow_arrows and self.flow_analysis_enabled:
-            annotated_frame = self.flow_analyzer.draw_flow_arrows(annotated_frame, tracking_results)
+        # Draw flow arrows - DEPRECATED: Using PhysicsFlowAnalyzer instead
+        # if show_flow_arrows and self.flow_analysis_enabled:
+        #     annotated_frame = self.flow_analyzer.draw_flow_arrows(annotated_frame, tracking_results)
         
         # Draw tracking IDs and bounding boxes
         for result in tracking_results:
@@ -339,18 +345,18 @@ class AdvancedCrowdAnalytics:
                    0.4, (255, 255, 255), 1)
         y_offset += line_height
         
-        # Flow metrics
-        if analysis_results['flow_analysis']:
-            flow_metrics = analysis_results['flow_analysis']['metrics']
-            cv2.putText(frame, f"Flow: {flow_metrics.dominant_direction}", 
-                       (panel_x + 5, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                       0.4, (255, 255, 255), 1)
-            y_offset += line_height
-            
-            cv2.putText(frame, f"Objects: {flow_metrics.total_objects}", 
-                       (panel_x + 5, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
-                       0.4, (255, 255, 255), 1)
-            y_offset += line_height
+        # Flow metrics - DEPRECATED: Using PhysicsFlowAnalyzer instead
+        # if analysis_results['flow_analysis']:
+        #     flow_metrics = analysis_results['flow_analysis']['metrics']
+        #     cv2.putText(frame, f"Flow: {flow_metrics.dominant_direction}", 
+        #                (panel_x + 5, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
+        #                0.4, (255, 255, 255), 1)
+        #     y_offset += line_height
+        #     
+        #     cv2.putText(frame, f"Objects: {flow_metrics.total_objects}", 
+        #                (panel_x + 5, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 
+        #                0.4, (255, 255, 255), 1)
+        #     y_offset += line_height
         
         # Zone metrics
         if analysis_results['zone_analysis']:
