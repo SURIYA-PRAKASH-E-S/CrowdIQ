@@ -5,7 +5,6 @@ Real-time AI-powered crowd monitoring, density estimation, and risk assessment f
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Stars](https://img.shields.io/github/stars/SURIYA-PRAKASH-E-S/CrowdIQ?style=social)
-[Live Demo](https://github.com/SURIYA-PRAKASH-E-S/CrowdIQ)
 
 ---
 
