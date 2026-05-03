@@ -2,50 +2,24 @@
 
 Real-time AI-powered crowd monitoring, density estimation, and risk assessment for intelligent surveillance and crowd management.
 
-**🔗 Live Demo**: [ICSS](https://icss2026vps.streamlit.app/)
-
----
-
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [System Architecture](#system-architecture)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [How to Run](#how-to-run)
-- [User Interface](#user-interface)
-- [Configuration](#configuration)
-- [Enhanced Alert System](#enhanced-alert-system)
-- [Email Setup Guide](#email-setup-guide)
-- [Risk Level System](#risk-level-system)
-- [Dense Crowd Detection](#dense-crowd-detection)
-- [Performance](#performance)
-- [Troubleshooting](#troubleshooting)
-- [Dependencies](#dependencies)
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Stars](https://img.shields.io/github/stars/SURIYA-PRAKASH-E-S/CrowdIQ?style=social)
+[Live Demo](https://github.com/SURIYA-PRAKASH-E-S/CrowdIQ)
 
 ---
 
 ## Overview
 
-**Intelligent Crowd Surveillance System** is a real-time computer vision application designed for intelligent crowd monitoring, density estimation, and risk assessment. It combines multiple AI models (YOLO, CSRNet) for enhanced detection accuracy in both normal and dense crowd scenarios.
+CrowdIQ uses dual YOLO models (v11 + v8) and CSRNet for real-time person detection, crowd counting, and density estimation. It features Deep SORT tracking, zone-based risk analysis, multi-admin email alert and Firebase cloud storage. Designed for security teams, event organizers, and facility managers needing intelligent crowd monitoring.
 
-### Key Highlights
-- **Dual YOLO Model System** - YOLO v11 + YOLO v8 for cross-validation
-- **Mobile Camera Support** - IP Webcam integration for flexible positioning
-- **Dense Crowd Detection** - Enhanced detection for crowded scenes
-- **Density Estimation** - CSRNet neural network for heatmap generation
-- **Zone-based Analysis** - Grid-based risk highlighting
-- **Advanced Analytics** - Intelligent risk assessment, flow analysis
-- **Cloud Storage** - Supabase for cloud analytics and data persistence
-- **Enhanced Alert System** - Real-time alerts with email notifications and snapshots
-- **Multi-Admin Email Setup** - Support for multiple administrators and security teams
-- **Cloudinary Integration** - Automatic snapshot capture and CDN storage
-- **Real-time Alert Dashboard** - Live alert monitoring with auto-refresh
-- **Manual Alert Controls** - Customizable alert levels and thresholds
-- **Camera Source Detection** - Different alert handling for mobile vs webcam
-- **SMS Feature Coming Soon** - Planned SMS notifications for critical alerts
+---
+
+## Screenshots
+
+![Dashboard](assets/screenshots/dashboard.png)
+![Alert Message](assets/screenshots/alert_message.png)
+![Detection Output](assets/screenshots/detection_output.png)
 
 ---
 
@@ -68,16 +42,14 @@ Real-time AI-powered crowd monitoring, density estimation, and risk assessment f
 
 | Category | Technologies |
 |----------|-------------|
-| **Frontend** | Streamlit, Streamlit WebRTC |
-| **Computer Vision** | OpenCV, YOLO v11, YOLO v8 |
-| **AI/ML** | PyTorch, Ultralytics, CSRNet |
-| **Tracking** | Deep SORT |
-| **Database** | Supabase (cloud analytics) |
-| **Email Services** | SMTP, Gmail, Outlook, Custom SMTP |
-| **Cloud Storage** | Cloudinary (image CDN) |
-| **Video Processing** | PyAV (av library) |
-| **Visualization** | Plotly, Matplotlib, Seaborn |
-| **Data Processing** | NumPy, Pandas, SciPy |
+| Frontend | Streamlit, Streamlit WebRTC |
+| Computer Vision | OpenCV, YOLO v11, YOLO v8, CSRNet |
+| Tracking | Deep SORT |
+| AI/ML | PyTorch, Ultralytics |
+| Database | Firebase Realtime Database |
+| Cloud Storage | Cloudinary |
+| Email | SMTP (Gmail/Outlook/Custom) |
+| Visualization | Plotly, Matplotlib, Seaborn |
 
 ---
 ## System Architecture
@@ -171,61 +143,13 @@ graph TB
 - **Configuration Management**: UI-based setup for all email and alert parameters
 ---
 
-## Project Structure
+## Quick Start
 
-```
-ICSS
-|-- app.py                      # Main Streamlit application
-|-- camera1.py                  # Mobile camera streaming (IP Webcam)
-|-- requirements.txt            # Python dependencies
-|-- README.md                   # Project documentation
-|-- alert.md                    # Alert system setup guide
-|-- doubts.md                   # FAQ and troubleshooting guide
-|-- enhanced_alert_setup.md     # Enhanced alert system guide
-|-- email_setup_guide.md        # Complete email setup guide
-|-- env_example.txt              # Environment variables template
-|-- crowd_data.db               # Local cache database (backup)
-|
-|-- model/                      # AI model files
-|   |-- yolo11l.pt                  # YOLO v11 (51MB)
-|   |-- V8l-haj.pt              # YOLO v8 (87MB)
-|   -- yolo11m.pt              # YOLO v11 medium (optional)
-|
-|-- components/                 # UI components
-|   -- alert_tab.py             # Enhanced alert tab component
-|
-|-- utils/                      # Utility modules
-|   |-- detection.py            # Detection pipeline
-|   |-- tracker.py              # Deep SORT tracking
-|   |-- advanced_analytics.py   # Analytics integration
-|   |-- risk_engine.py          # Risk assessment
-|   |-- zone_analyzer.py        # Zone monitoring
-|   |-- flow_analyzer.py        # Flow analysis
-|   |-- csrnet_density.py       # CSRNet density estimation
-|   |-- crowd_visualization.py  # Visualization components
-|   |-- crowd_analytics.py      # Crowd behavior analysis
-|   |-- alert_manager.py        # Real-time alert system
-|   |-- alert_store.py          # Enhanced alert storage (Supabase)
-|   |-- email_config.py         # Email configuration and management
-|   |-- cloudinary_helper.py    # Cloudinary image upload helper
-|   -- database.py              # Supabase integration
-```
-
----
-
-## Installation
-
-### Prerequisites
-- Python 3.8 or higher
-- Webcam or video files for testing
-- (Optional) NVIDIA GPU for faster inference
-
-### Step 1: Clone/Download Project
-
-```bash
-git clone  https://github.com/SURIYA-PRAKASH-E-S/ICSS.git 
-cd ICSS
-```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/SURIYA-PRAKASH-E-S/CrowdIQ.git
+   cd CrowdIQ
+   ```
 
 2. **Create virtual environment**
    ```bash
@@ -250,229 +174,36 @@ cd ICSS
    streamlit run app.py
    ```
 
-### Access the Application
-
-After running, you'll see:
-
-```
-You can now view your Streamlit app in your browser.
-
-Local URL: http://localhost:8501
-Network URL: http://192.168.1.4:8501
-```
-
-Open **http://localhost:8501** in your browser.
-
-### Quick Start Guide
-
-1. **Select Input Mode** (Tab 1: Live Feed)
-   - Choose "Webcam (Live)" for real-time camera feed
-   - Choose "Mobile Camera (IP Webcam)" for WiFi streaming from phone
-   - Or "Upload Video" to process a video file
-
-2. **Start Processing**
-   - Click "Start" to begin video processing
-   - View real-time detections and overlays
-
-3. **Monitor Analytics** (Tab 2: Analytics)
-   - View people count, density, flow direction
-   - Check risk level and alerts
-
-4. **View Zone Analysis** (Tab 3: Map Area)
-   - Visualize zone-based risk distribution
-   - Monitor overcrowded areas
-
-5. **View Historical Data** (Tab 4: Cloud DB)
-   - Check stored analytics from Supabase cloud database
-   - View trends and statistics
-
-6. **Configure Settings** (Tab 5: Controls)
-   - Enable/disable detection features
-   - Adjust thresholds and parameters
-
-7. **Manage Alerts** (Tab 6: Alerts)
-   - View active and historical alerts
-   - Configure alert thresholds
-
----
-
-## User Interface
-
-### Tab 1: 🎥 Live Feed
-
-| Feature | Description |
-|---------|-------------|
-| Input Selection | Webcam, Mobile Camera (IP Webcam), or Video Upload |
-| Real-time Processing | Live video with AI overlays |
-| Performance Info | FPS, model status, optimization mode |
-| Visual Overlays | Bounding boxes, risk levels, flow arrows |
-| Alert System | Color-coded risk warnings |
-
-### Tab 2: 📊 Analytics
-
-| Feature | Description |
-|---------|-------------|
-| Real-time Metrics | People count, density, flow, risk |
-| Advanced Analytics | Risk engine, zone analysis, flow patterns |
-| Risk Assessment | Color-coded indicators and alerts |
-| Model Performance | Detection statistics and model status |
-
-### Tab 3: Map Area
-
-| Feature | Description |
-|---------|-------------|
-| Zone Grid | Visual representation of risk zones |
-| Zone Details | Per-zone people count and density |
-| Zone Alerts | Overcrowding and violation warnings |
-
-### Tab 4: 📂 Cloud DB
-
-| Feature | Description |
-|---------|-------------|
-| Current Metrics | Latest database values |
-| Historical Trends | Last 10 records table |
-| Statistics | Average values and risk distribution |
-| Database Info | Record count and storage details |
-
-### Tab 5: ⚙️ Controls
-
-| Feature | Description |
-|---------|-------------|
-| Model Selection | YOLO v11/v8 toggle |
-| Deep SORT Toggle | Multi-object tracking control |
-| Advanced Analytics | Risk, zone, flow analysis toggles |
-| Dense Crowd Detection | CSRNet settings |
-| Threshold Settings | Density and count risk levels |
-| Risk Weights | Configurable assessment parameters |
-| Zone Configuration | Grid size and restricted zones |
-| Mobile Camera | IP Webcam connection settings |
-
-### Tab 6: 🚨 Alerts
-
-| Feature | Description |
-|---------|-------------|
-| Manual Alert Controls | Customizable alert levels and thresholds |
-| Email Configuration | Complete SMTP setup for multiple administrators |
-| Active Alerts | Current critical and warning alerts |
-| Alert History | Past alert events log |
-| Alert Statistics | Comprehensive metrics and status display |
-| Live Alert Dashboard | Real-time monitoring with auto-refresh |
-| SMS Configuration | Planned SMS notifications (coming soon) |
-
 ---
 
 ## Configuration
 
-### ⚠️ IMPORTANT: Alert System Configuration
+```env
+# Firebase Realtime Database
+FIREBASE_DATABASE_URL=https://your-project-id-default-rtdb.firebaseio.com
+GOOGLE_APPLICATION_CREDENTIALS=firebase-service-account.json
 
-**The alert system (Email/SMS) requires proper configuration to function correctly.**
+# SMTP Email Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USE_TLS=true
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
 
-#### Required Configuration Steps:
+# Cloudinary (for alert snapshots)
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+```
 
-1. **Environment Setup** (CRITICAL)
-   ```bash
-   # Copy environment template
-   cp env_example.txt .env
-   
-   # Edit .env with your credentials
-   # See alert.md for detailed setup guide
-   ```
-
-2. **Email Alert Setup** (Required for email notifications)
-   - Gmail 2FA must be enabled
-   - Generate App Password (not regular password)
-   - Configure SMTP credentials in .env file
-   - Enable email alerts in Alerts tab
-
-3. **Manual Alert Configuration** (Optional, for custom alert levels)
-   - Set alert levels: LOW, MEDIUM, HIGH, CRITICAL
-   - Configure density thresholds (0.1-2.0 p/m²)
-   - Set people count thresholds (1-50 people)
-   - Apply settings in Alerts tab for immediate effect
-
-4. **SMS Alert Setup** (Optional, for SMS notifications)
-   - Configure phone number and carrier in .env
-   - Enable SMS alerts in Alerts tab
-   - Only CRITICAL alerts trigger SMS
-
-5. **Database Configuration** (Recommended, for cloud storage)
-   - Configure Supabase credentials in .env
-   - Required for cloud data persistence and real-time sync
-   - Local cache used as backup when cloud unavailable
-
-**📋 Complete Setup Guide**: See `alert.md` for step-by-step instructions
-
-### Detection Thresholds
-
-| Parameter | Default | Manual Range | Description |
-|-----------|---------|-------------|-------------|
-| Low Density Threshold | 0.5 | 0.1-2.0 p/m² | Triggers "Average" risk |
-| Medium Density Threshold | 1.0 | 0.1-2.0 p/m² | Triggers "Risky" risk |
-| People Count Threshold | 8 | 1-50 people | Number for "Risky" level |
-| Alert Level | Automatic | LOW/MEDIUM/HIGH/CRITICAL | Manual alert severity |
-
-### Risk Engine Weights
-
-| Weight | Default | Description |
-|--------|---------|-------------|
-| Density Weight | 0.40 | Crowd density factor |
-| Flow Conflict Weight | 0.35 | Bidirectional flow factor |
-| Speed Variation Weight | 0.25 | Velocity variation factor |
-
-### Dense Crowd Detection Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| CSRNet Enabled | True | Density heatmap generation |
-| Density Heatmap | True | Overlay heatmap on video |
-| Zone Grid | True | Color-coded risk zones |
-| Grid Size | 4x4 | Zone grid dimensions |
-
-### Deep SORT Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Max Age | 30 | Track persistence (frames) |
-| N Init | 5 | Track confirmation threshold |
-| NMS Max Overlap | 0.3 | Detection overlap threshold |
+See [setup.md](setup.md) for complete setup guides.
 
 ---
 
-## Mobile Camera Setup
+## Datasets Links
 
-### IP Webcam App Configuration
-
-1. **Install IP Webcam App**
-   - Android: Download "IP Webcam" from Google Play Store
-   - iOS: Download "IP Webcam" from App Store
-
-2. **Configure IP Webcam Settings**
-   - Open the IP Webcam app on your phone
-   - Navigate to "Settings" or "Preferences"
-   - Set the following:
-     - **Username/Password**: (Optional) Set authentication if needed
-     - **Resolution**: 640x480 or higher
-     - **FPS**: 30 or higher
-     - **Port**: 8080 (default)
-
-3. **Start IP Webcam Server**
-   - Tap "Start Server" in the app
-   - Note the IP address shown (e.g., 192.168.1.5:8080)
-   - Ensure your phone and computer are on the same WiFi network
-
-4. **Connect in Application**
-   - Go to the sidebar in the app
-   - Find "Mobile Camera" section
-   - Enter the IP address from step 3
-   - Click "Connect"
-   - Select "Mobile Camera (IP Webcam)" in the Live Feed tab
-
-### Troubleshooting Mobile Camera
-
-| Issue | Solution |
-|-------|----------|
-| Connection failed | Check phone and PC are on same WiFi |
-| Black screen | Try different stream URL in settings |
+- [YOLOv11 custom dataset](https://universe.roboflow.com/suriyaes/crowd-dataset1/dataset/5)
+- [YOLOv8 hajj dataset](https://universe.roboflow.com/hajj-iabgo/hajjv2)
 
 ---
 
@@ -495,385 +226,77 @@ SNAPSHOT: https://res.cloudinary.com/icss-alerts/alert.jpg
 
 ---
 
-## Email Setup Guide
+## Risk Levels
 
-### Quick Setup Checklist
+| Level | Color | Condition |
+|-------|-------|-----------|
+| Normal | Green | Density < 0.5 p/m², Count < 8 |
+| Average | Yellow | Density 0.5-1.0 p/m², Count 8-15 |
+| Risky | Red | Density > 1.0 p/m², Count > 15 |
 
-**Required Configuration**
-- [ ] Choose email provider (Gmail recommended)
-- [ ] Enable 2-factor authentication on email account
-- [ ] Generate App Password (Gmail) or use regular password
-- [ ] Configure SMTP credentials in ICSS interface
-- [ ] Add multiple administrator recipients
-- [ ] Send test email to verify setup
+---
 
-**Environment Variables (.env)**
-```bash
-# SMTP Configuration
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USE_TLS=true
-SMTP_USERNAME=your-alerts@gmail.com
-SMTP_PASSWORD=your-gmail-app-password
+## Crowd Zone Map
 
-# Multiple Recipients (comma-separated)
-EMAIL_RECIPIENTS=admin1@company.com,admin2@company.com,security@company.com
+Interactive geospatial simulation for crowd zone analysis with manual polygon input and density-based capacity planning.
 
-# Cloudinary (for snapshots)
-CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
-CLOUDINARY_API_KEY=your_cloudinary_api_key
-CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+**Features:**
+- **Manual Polygon Input**: Define zone corners with latitude/longitude coordinates
+- **Area Calculation**: Shoelace formula adapted for lat/lon coordinates
+- **Density Scenarios**: Select from Crush (0.09 m²), Very Dense (0.25 m²), Safe Crowd (0.5 m²), Comfortable (1.0 m²)
+- **Safe Capacity**: Automatically calculated based on selected density scenario
+- **Live Simulation Map**: Folium-based interactive map with color-coded density overlay
+- **Grid Visualization**: 1m x 1m grid showing crowd count distribution
+- **Live Location Marker**: Real-time position tracking on map
+- **Dual Mode**: Live detection mode (uses real-time people count) and manual simulation mode
+- **Alert Integration**: Automatic alerts when safe capacity is exceeded
+
+**Density Scenarios:**
+- 🚨 Crush (Danger): 0.09 m²/person (~11 people/m²)
+- ⚠️ Very Dense: 0.25 m²/person (~4 people/m²)
+- ✅ Safe Crowd: 0.5 m²/person (~2 people/m²)
+- 🟢 Comfortable: 1.0 m²/person (~1 person/m²)
+
+---
+
+## Project Structure
+
 ```
-
-### Gmail App Password Setup
-
-1. **Enable 2FA** on your Gmail account
-2. **Go to**: https://myaccount.google.com/apppasswords
-3. **Select app**: "Mail" and "Other (Custom name)"
-4. **Enter name**: "ICSS Alerts"
-5. **Generate**: Copy the 16-character password
-6. **Use this password** in SMTP_PASSWORD field
-
-### Multiple Administrator Setup
-
-**Recommended Recipient Structure**
-```bash
-EMAIL_RECIPIENTS=it-security@company.com,operations@company.com,management@company.com,emergency@company.com
+CrowdIQ/
+├── app.py                      # Main Streamlit application
+├── camera1.py                  # Mobile camera streaming
+├── requirements.txt            # Python dependencies
+├── model/                      # AI model files
+│   ├── yolo11l.pt
+│   └── V8l-haj.pt
+├── utils/                      # Utility modules
+│   ├── detection.py
+│   ├── tracker.py
+│   ├── risk_engine.py
+│   ├── alert_manager.py
+│   └── ...
+└── components/                 # UI components
 ```
-
-**Role-Based Recipients**
-- **IT Security**: it-security@company.com
-- **Operations Team**: operations@company.com
-- **Management**: management@company.com
-- **Emergency Contact**: emergency@company.com
-- **On-call Engineer**: oncall@company.com
-
-### Configuration in ICSS Interface
-
-1. **Open ICSS application**
-2. **Go to "Alerts" tab**
-3. **Find "Email Configuration" section**
-4. **Configure SMTP settings**:
-   - SMTP Host: smtp.gmail.com
-   - SMTP Port: 587
-   - Use TLS: Checked
-   - Sender Email: your-alerts@gmail.com
-   - Sender Password: your-app-password
-5. **Add Recipients**: Comma-separated email addresses
-6. **Save Configuration**: Click "Save Email Configuration"
-7. **Test Setup**: Click "Send Test Email"
-
----
-
-## Risk Level System
-
-### Risk Classifications
-
-| Level | Color | Condition | Threshold | Action |
-|-------|-------|-----------|-----------|--------|
-| **NORMAL** | Green | Low crowd density | < 5 people AND < 0.3 p/m² | Continue monitoring |
-| **AVERAGE** | Yellow | Moderate density | 5-15 people OR 0.3-0.7 p/m² | Increased monitoring |
-| **RISKY** | Red | High density | > 15 people OR > 0.7 p/m² | Prepare for intervention |
-
-### Risk Assessment Formula
-
-```python
-risk_score = (
-    density_weight * density_score +           # 40% weight
-    flow_conflict_weight * flow_conflict_score +  # 35% weight
-    speed_variation_weight * speed_variation_score  # 25% weight
-)
-```
-
-### Configurable Thresholds
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Low Density Threshold | 0.5 | Triggers "Average" risk |
-| Medium Density Threshold | 1.0 | Triggers "Risky" risk |
-| People Count Threshold | 8 | Number for "Risky" level |
-| Alert Cooldown | 60 seconds | Minimum time between alerts |
-
----
-
-## Alert System Features
-
-### Manual Alert Controls
-
-The ICSS system now provides comprehensive manual control over alert levels and thresholds:
-
-#### **Alert Level Control**
-- **LOW**: Minor alerts for monitoring purposes
-- **MEDIUM**: Standard alert level for moderate incidents
-- **HIGH**: Important alerts requiring attention
-- **CRITICAL**: Emergency alerts requiring immediate action
-
-#### **Threshold Settings**
-- **Density Threshold**: 0.1-2.0 people per square meter
-- **People Count Threshold**: 1-50 people
-- **Real-time Application**: Settings take effect immediately
-
-#### **Alert Priority System**
-1. **Manual Settings** (highest priority) - Override automatic detection
-2. **Mobile Camera** (medium priority) - Medium risk alerts only
-3. **Webcam/Auto** (standard priority) - Full alert capabilities
-
-#### **Camera Source Detection**
-- **Webcam Mode**: Full alert severity (HIGH/CRITICAL/MEDIUM/LOW)
-- **Mobile Camera**: Medium risk alerts only
-- **Manual Mode**: Uses manually selected alert level
-
-#### **Alert Types**
-- **Manual Alerts**: `[Manual]` prefix when manual settings active
-- **Mobile Camera Alerts**: `[Mobile Camera]` prefix for mobile source
-- **Zone Overcrowding**: Standard zone-based alerts
-- **High Risk**: Global risk assessment alerts
-- **Crowd Surge**: Rapid crowd increase detection
-
-#### **Real-time Dashboard**
-- **Auto-refresh**: Every 3 seconds when enabled
-- **Live Statistics**: Current alert metrics and status
-- **Alert History**: Complete log of all alert events
-- **Service Status**: Database, email, and service connectivity
-
----
-
-## Dense Crowd Detection
-
-### CSRNet Density Estimation
-
-**Purpose**: Generate density heatmaps and estimate crowd count from density maps.
-
-**How it works**:
-1. Processes frame through CSRNet neural network
-2. Generates density map (probability distribution)
-3. Estimates total crowd count from density map
-4. Creates colored heatmap visualization
-
-**Fallback**: Detection-based density estimation if CSRNet unavailable.
-
-### Zone-based Risk Highlighting
-
-**Purpose**: Divide frame into grid zones and classify risk per zone.
-
-**Zone Classification**:
-| Color | Risk Level | Density Range |
-|-------|------------|---------------|
-| 🟢 Green | Low | < 0.3 |
-| 🟡 Yellow | Medium | 0.3 - 0.6 |
-| 🔴 Red | High | > 0.6 |
-
-**Visualization**:
-- Zone boundaries with color-coded borders
-- Semi-transparent zone fill
-- Zone density labels
-- Risk legend overlay
-
----
-
-## Performance
-
-### Processing Speed
-
-| Mode | Frame Rate | Description |
-|------|------------|-------------|
-| Optimized Mode | ~10 FPS | Frame skipping (1/3 frames) |
-| Fast Mode | ~15 FPS | No Deep SORT tracking |
-| Dense Detection | ~8 FPS | CSRNet enabled |
-
-### Model Performance
-
-| Model | Size | Accuracy | Speed |
-|-------|------|----------|-------|
-| YOLO v11 | 51MB | High | Fast |
-| YOLO v8 | 87MB | Good | Medium |
-
-### Optimization Features
-
-- **Frame Skipping**: Process every 3rd frame
-- **Resolution Scaling**: Adaptive 640x480 target
-- **Cached Model Loading**: @st.cache_resource
-- **Non-blocking Database**: Async Supabase inserts with local cache
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
-
-#### 1. Model Loading Errors
-
-**Solution**: 
-- Verify model files exist in `model/` directory
-- Check file sizes match expected (51MB, 87MB)
-- Re-download models if corrupted
-
-#### 2. Webcam Not Working
-
-**Solution**: 
-- Check webcam permissions
-- Try different browser (Chrome recommended)
-- Verify webcam is not used by another application
-
-#### 3. Low FPS / Slow Processing
-
-**Solutions**:
-- Disable Deep SORT tracking
-- Use single model (YOLO v11 only)
-- Disable CSRNet
-- Reduce frame resolution
-
-#### 4. "Thread 'async_media_processor' missing ScriptRunContext"
-
-**Solution**: This warning can be ignored - it's expected behavior in async video processing.
-
-#### 5. Supabase Connection Errors
-
-**Solution**: 
-- Check SUPABASE_URL and SUPABASE_ANON_KEY in .env
-- Verify Supabase project is active
-- Check network connectivity to Supabase
-- Review console for detailed error messages
-
----
-
-## Dependencies
-
-### Core Dependencies
-
-```
-streamlit>=1.28.0
-streamlit-webrtc>=1.0.0
-opencv-python>=4.8.0
-ultralytics>=8.0.0
-numpy>=1.24.0
-av>=10.0.0
-supabase>=1.0.0
-plotly>=5.15.0
-pandas>=2.0.0
-```
-
-### Dense Crowd Detection Dependencies
-
-```
-torch>=2.0.0
-torchvision>=0.15.0
-scipy>=1.10.0
-scikit-learn>=1.2.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-```
-
-### Mobile Camera Dependencies
-
-```
-opencv-python>=4.8.0
-```
-
-### Optional Dependencies
-
-```
-deep-sort-realtime  # For Deep SORT tracking
-```
-
----
-
-## Risk Classification
-
-| Level | Color | Condition | Action |
-|-------|-------|-----------|--------|
-| **Normal** | 🟢 Green | Low density, safe conditions | No action required |
-| **Average** | 🟡 Yellow | Moderate density | Monitor closely |
-| **Risky** | 🔴 Red | High density or overcrowding | Immediate attention |
-
----
-
-## Model Information
-
-### YOLO v11 (Primary)
-- **File**: `model/yolo11l.pt`
-- **Size**: 51MB
-- **Version**: Latest
-- **Accuracy**: High
-- **Use Case**: General crowd detection
-
-### YOLO v8 (Secondary)
-- **File**: `model/V8l-haj.pt`
-- **Size**: 87MB
-- **Version**: Legacy
-- **Accuracy**: Good
-- **Use Case**: Cross-validation, backup
-
----
-
-## Data Storage
-
-### Supabase Database
-
-- **Type**: Cloud-based PostgreSQL database
-- **Connection**: REST API via Supabase client
-- **Schema**:
-
-```sql
-CREATE TABLE crowd_metrics (
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    people_count INTEGER,
-    density FLOAT,
-    flow_direction VARCHAR,
-    risk_level VARCHAR
-);
-```
-
-### Data Operations
-
-- **Insert**: Every processed frame (real-time sync)
-- **Query**: Last 10 records for trends
-- **Statistics**: Average values, risk distribution
-- **Sync**: Real-time cloud synchronization
-- **Backup**: Local cache for offline access
-
----
-
-## Support
-
-For issues or questions:
-1. Check [Troubleshooting](#troubleshooting) section
-2. Verify all dependencies are installed
-3. Check model files exist
-4. Review console output for errors
+| Issue | Solution |
+|-------|----------|
+| Camera not detected | Check browser permissions, try different input mode |
+| Firebase connection error | Verify .env credentials, check service account file |
+| Email not sending | Enable 2FA, generate App Password (Gmail) |
+| Model loading error | Ensure model files exist in model/ directory |
+| Low FPS | Disable CSRNet, use single YOLO model |
 
 ---
 
 ## License
 
-This project is for educational and research purposes.
+MIT License — see LICENSE file for details.
 
 ---
 
-## Recent Enhancements
+***Built with Streamlit · YOLO · PyTorch · OpenCV***
 
-### Manual Alert System (Latest)
-- **Customizable Alert Levels**: LOW, MEDIUM, HIGH, CRITICAL
-- **Adjustable Thresholds**: Density (0.1-2.0 p/m²) and People Count (1-50)
-- **Real-time Application**: Settings take effect immediately
-- **Priority System**: Manual settings override automatic detection
-- **Camera Source Detection**: Different handling for mobile vs webcam
-- **UI Improvements**: Clean interface without duplication glitches
-
-### Enhanced Email System
-- **Multi-Administrator Support**: Unlimited recipients
-- **Professional Email Format**: Structured alerts with detailed information
-- **Cloudinary Integration**: Automatic snapshot capture and CDN storage
-- **Test Email Function**: Verify configuration before deployment
-- **SMS Coming Soon**: Planned SMS notifications for critical alerts
-
-### System Improvements
-- **Fixed UI Duplication**: Resolved auto-refresh glitches
-- **Enhanced Alert Workflow**: Camera source-specific alert handling
-- **Better Documentation**: Comprehensive setup guides and troubleshooting
-
----
-
-**Built with using Streamlit, YOLO, PyTorch and OpenCV**
-
-**Developed by [ES](https://github.com/SURIYA-PRAKASH-E-S)**
