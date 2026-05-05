@@ -204,6 +204,10 @@ See [setup.md](setup.md) for complete setup guides.
 - [YOLOv11 custom dataset](https://universe.roboflow.com/suriyaes/crowd-dataset1/dataset/5)
 - [YOLOv8 hajj dataset](https://universe.roboflow.com/hajj-iabgo/hajjv2)
 
+### Model Comparison
+
+![Model Comparison Chart](https://docs.google.com/spreadsheets/d/e/2PACX-1vQHcbd_F_SIJCeVNNbg92Z7CEs5kh2DkHa2PIF6dub-_pN_oD67XQIDCSbZ2tNyfu2TDiopa_snpJ9u/pubchart?oid=330122748&format=interactive)
+
 ---
 
 ## Alert System
@@ -293,7 +297,7 @@ CrowdIQ/
 
 ## License
 
-MIT License — see LICENSE file for details.
+MIT License — see [LICENSE](LICENSE) file for details.
 
 ---
 
