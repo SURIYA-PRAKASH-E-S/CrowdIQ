@@ -206,7 +206,7 @@ See [setup.md](setup.md) for complete setup guides.
 
 ### Model Comparison
 
-![Model Comparison Chart](https://docs.google.com/spreadsheets/d/e/2PACX-1vQHcbd_F_SIJCeVNNbg92Z7CEs5kh2DkHa2PIF6dub-_pN_oD67XQIDCSbZ2tNyfu2TDiopa_snpJ9u/pubchart?oid=330122748&format=interactive)
+[Click here to view model comparison](https://docs.google.com/spreadsheets/d/e/2PACX-1vQHcbd_F_SIJCeVNNbg92Z7CEs5kh2DkHa2PIF6dub-_pN_oD67XQIDCSbZ2tNyfu2TDiopa_snpJ9u/pubchart?oid=330122748&format=interactive)
 
 ---
 
